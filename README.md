@@ -4,7 +4,7 @@
 
 # plugin-hunter
 
-**AI 코딩 에이전트 플러그인 보안 스캐너**
+**AI CLI(Claude code, Codex) Plugin 보안 스캐너**
 
 Claude Code · Codex CLI 플러그인을 **설치하기 전에** 악성 코드를 잡아냅니다.
 
