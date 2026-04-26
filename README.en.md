@@ -47,42 +47,48 @@ Detection runs as a **single Claude pipeline**:
 
 ## Quick start (3 minutes)
 
-### 1. Install Bun (skip if already installed)
+> Every verdict in `ph` is produced by Claude, so a `.env` containing `ANTHROPIC_API_KEY` must sit **next to where you run the command**. dotenv resolves `.env` from the current working directory, which makes the global-install (`bun add -g`) and one-shot (`bunx`) paths ambiguous about where to put your key — **cloning the repo and running it from inside is the clearest flow**.
+
+### 1. Clone & install dependencies
 
 ```bash
+# Install Bun first if you don't have it
 curl -fsSL https://bun.sh/install | bash
+
+git clone https://github.com/MoonDongmin/plugin-hunter
+cd plugin-hunter
+bun install
 ```
 
-> Don't want / can't install Bun? Jump to the [pre-built binary](#bun-less) section.
-
-### 2. Run `ph`
-
-Lightest path — no install, one-shot:
+### 2. Set your Claude API key
 
 ```bash
-bunx plugin-hunter scan MoonDongmin/git-helper-pro-claude
+cp .env.example .env
+# Open .env and fill in ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-For repeated use, install globally:
+Get a key from the [Anthropic Console](https://console.anthropic.com/). A single scan averages **under $0.01** — the system prompt sits in prompt cache, so input cost on every scan after the first is essentially zero.
+
+### 3. Run a scan
+
+Run it directly from the repo directory:
 
 ```bash
-bun add -g plugin-hunter
+bun run dev scan MoonDongmin/git-helper-pro-claude
+```
+
+If `bun run dev` gets old, expose `ph` on your global `PATH` with **`bun link`**. You'll still need to run it from the cloned `plugin-hunter` directory so `.env` is picked up — or stash `ANTHROPIC_API_KEY` in your shell:
+
+```bash
+bun link
+
+# From inside the repo
 ph scan MoonDongmin/git-helper-pro-claude
-```
 
-### 3. Set your Claude API key (required)
-
-Every verdict in `ph` is produced by Claude. If `ANTHROPIC_API_KEY` isn't set, the scan errors out before it even starts.
-
-```bash
-# Drop a .env file in the working directory
-echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
-
-# Or export it
+# Or export the key to use ph from anywhere
 export ANTHROPIC_API_KEY=sk-ant-...
+cd ~/anywhere && ph scan owner/repo
 ```
-
-Get a key from the [Anthropic Console](https://console.anthropic.com/). A single scan averages **under $0.01** — the system prompt sits in prompt cache, so every scan after the first is even cheaper.
 
 ---
 
@@ -194,27 +200,27 @@ Pre-built single binaries (built with `bun build --compile`, Bun runtime embedde
 # macOS arm64
 curl -L https://github.com/MoonDongmin/plugin-hunter/releases/latest/download/ph-darwin-arm64 -o ph
 chmod +x ph
-./ph scan <github-url>
 
 # linux x64
 curl -L https://github.com/MoonDongmin/plugin-hunter/releases/latest/download/ph-linux-x64 -o ph
 chmod +x ph
+
+# Drop a .env next to the binary, or export the key
+echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
 ./ph scan <github-url>
 ```
+
+> Even in single-binary mode, `.env` is loaded from the **cwd you invoke `ph` from**. If you'd rather not deal with file placement, `export ANTHROPIC_API_KEY=...` in your shell rc.
 
 ---
 
 ## Local development
 
-```bash
-git clone https://github.com/MoonDongmin/plugin-hunter
-cd plugin-hunter
-bun install
-bun link            # registers `ph` on your global PATH
-ph scan <github-url>
+Once you've gone through [Quick start](#quick-start-3-minutes) (clone, install, `.env`), the additional commands you'll need are:
 
-bun test            # tests
-bun run build       # builds darwin-arm64 + linux-x64 binaries
+```bash
+bun test            # vitest
+bun run build       # darwin-arm64 + linux-x64 single binaries → dist/
 ```
 
 ---

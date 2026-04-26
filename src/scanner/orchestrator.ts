@@ -42,14 +42,16 @@ export async function scanLocalDir(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     onStage('claude-error', msg);
+    // Fail-CLOSED: 분석이 실패하면 'clean' 판정을 내릴 근거가 없으므로
+    // HIGH/surface=high 로 승격해 isUnsafe()가 true가 되게 한다.
     errorFindings.push({
-      severity: 'LOW',
+      severity: 'HIGH',
       ruleId: 'PH-CLAUDE-ERR',
       source: 'meta',
-      surface: 'low',
+      surface: 'high',
       filePath: '(scanner)',
       snippet: msg.slice(0, 200),
-      description: 'Claude 분석 실패 — 결과를 신뢰할 수 없음. ANTHROPIC_API_KEY 또는 네트워크를 확인하세요.',
+      description: 'Claude 분석이 실패하여 결과를 신뢰할 수 없습니다. 안전 판정을 보류합니다. ANTHROPIC_API_KEY 또는 네트워크를 확인 후 재시도하세요.',
     });
   }
 

@@ -1,6 +1,7 @@
 import { scanRepo } from '../scanner/orchestrator.ts';
-import { renderReport, isUnsafe } from '../reporter/terminal.ts';
+import { renderReport, renderRemediation, isUnsafe } from '../reporter/terminal.ts';
 import { renderJson } from '../reporter/json.ts';
+import { generateRemediation } from '../analyzer/remediation.ts';
 import { upsertEntry } from '../state/registry.ts';
 import { appendHistory } from '../state/history.ts';
 import type { RegistryEntry } from '../state/types.ts';
@@ -9,6 +10,7 @@ import { Spinner, c, describeStage, icon } from './ui.ts';
 interface ScanCommandOptions {
   json?: boolean;
   noSave?: boolean;
+  noRemediation?: boolean;
 }
 
 export async function runScanCommand(url: string, opts: ScanCommandOptions, version: string): Promise<number> {
@@ -47,10 +49,31 @@ export async function runScanCommand(url: string, opts: ScanCommandOptions, vers
   const { report, fileHashes } = result;
   const unsafe = isUnsafe(report);
 
+  // unsafe 일 때만 LLM 으로 한국어 권장 조치 생성. 실패하면 null → 출력 생략.
+  let remediation: string | null = null;
+  if (unsafe && opts.noRemediation !== true) {
+    if (!isJson) {
+      const remSpinner = new Spinner();
+      remSpinner.start(describeStage('remediation', 'AI 권장 조치 생성 중'));
+      remediation = await generateRemediation(report);
+      if (remediation) remSpinner.succeed();
+      else remSpinner.warn(describeStage('remediation-error', '생성 실패 — 건너뜀'));
+    } else {
+      remediation = await generateRemediation(report);
+    }
+  }
+
   if (isJson) {
-    process.stdout.write(renderJson(report) + '\n');
+    if (remediation) {
+      process.stdout.write(JSON.stringify({ ...report, aiRemediation: remediation }, null, 2) + '\n');
+    } else {
+      process.stdout.write(renderJson(report) + '\n');
+    }
   } else {
     process.stdout.write('\n' + renderReport(report, version) + '\n');
+    if (remediation) {
+      process.stdout.write(renderRemediation(remediation) + '\n');
+    }
   }
 
   if (opts.noSave !== true) {

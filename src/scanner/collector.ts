@@ -167,7 +167,7 @@ function checkSymlink(rootDir: string, full: string, rel: string): Finding | nul
   };
 }
 
-function roleFor(rel: string): FileRole | null {
+export function roleFor(rel: string): FileRole | null {
   const lower = rel.toLowerCase().replaceAll('\\', '/');
   const slashed = '/' + lower; // makes "starts with foldername/" and "/foldername/" both match `/foldername/`
   const base = lower.split('/').pop() ?? '';

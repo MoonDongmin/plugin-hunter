@@ -123,6 +123,97 @@ function verdictBanner(report: ScanReport, unsafe: boolean, width: number): stri
   });
 }
 
+/**
+ * Claude 가 생성한 한국어 markdown 가이드를 터미널 친화적으로 렌더.
+ *
+ * 구조:
+ *   - 상단: hr + 헤더 (◆ AI 권장 조치)
+ *   - 본문: section 번호별 색상 코드 + 들여쓰기 + bullet 정규화
+ *   - inline: **bold** → ANSI bold, `code` → cyan, *italic* → dim
+ *
+ * 색상 매핑은 사고 대응 단계의 의미와 정렬 (긴급 → 행동 → 분석 → 계획 → 회복).
+ */
+const SECTION_COLORS: Array<(s: string) => string> = [
+  c.boldRed,       // 1. 즉시 조치 (긴급)
+  c.boldYellow,    // 2. 제거 절차 (행동)
+  c.boldMagenta,   // 3. 노출 가능성 평가 (분석)
+  c.boldCyan,      // 4. credential rotation (계획)
+  c.boldGreen,     // 5. 안전한 대안 (회복)
+];
+
+export function renderRemediation(text: string): string {
+  const w = termWidth();
+  const out: string[] = [];
+  out.push('');
+  out.push(hr(w));
+  out.push(`  ${c.boldCyan(icon.diamond + ' AI 권장 조치')}  ${c.dim('Claude 가 finding 기반 생성')}`);
+  out.push(hr(w));
+
+  for (const raw of text.split('\n')) {
+    out.push(renderRemediationLine(raw));
+  }
+
+  out.push('');
+  // 헤더 prefix \n + Claude 가 만든 빈 줄이 겹쳐 3+ 빈 줄이 되는 케이스 정돈.
+  return out.join('\n').replace(/\n{3,}/g, '\n\n');
+}
+
+function renderRemediationLine(raw: string): string {
+  if (raw.trim() === '') return '';
+
+  // 섹션 헤더: **N. title** [— 본문]?
+  const headerMatch = raw.match(/^\s*\*\*\s*(\d+)\.\s*(.+?)\s*\*\*\s*[—\-:]?\s*(.*)$/);
+  if (headerMatch) {
+    const num = headerMatch[1] ?? '0';
+    const title = headerMatch[2] ?? '';
+    const rest = (headerMatch[3] ?? '').trim();
+    const idx = (parseInt(num, 10) - 1) % SECTION_COLORS.length;
+    const colorFn = SECTION_COLORS[idx] ?? c.boldCyan;
+    const head = `\n  ${colorFn(num + '.')}  ${colorFn(title)}`;
+    if (rest) {
+      return `${head}\n      ${renderInline(rest)}`;
+    }
+    return head;
+  }
+
+  // ## H2 markdown 헤더 (Claude 가 변형해 쓸 수 있음)
+  const h2Match = raw.match(/^##\s+(.*)$/);
+  if (h2Match) {
+    return `\n  ${c.boldCyan(h2Match[1] ?? '')}`;
+  }
+
+  // bullet (- 또는 *) — 들여쓰기 깊이 보존
+  const bulletMatch = raw.match(/^(\s*)[-*]\s+(.*)$/);
+  if (bulletMatch) {
+    const lead = bulletMatch[1] ?? '';
+    const content = bulletMatch[2] ?? '';
+    const depth = Math.floor(lead.length / 2);
+    const pad = '      ' + '  '.repeat(depth);
+    return `${pad}${c.cyan(icon.arrow)} ${renderInline(content)}`;
+  }
+
+  // ordered list (1. ..., 2. ...)
+  const orderedMatch = raw.match(/^(\s*)(\d+)\.\s+(.*)$/);
+  if (orderedMatch) {
+    const lead = orderedMatch[1] ?? '';
+    const num = orderedMatch[2] ?? '';
+    const content = orderedMatch[3] ?? '';
+    const depth = Math.floor(lead.length / 2);
+    const pad = '      ' + '  '.repeat(depth);
+    return `${pad}${c.dim(num + '.')} ${renderInline(content)}`;
+  }
+
+  // 그 외 본문 — indent 6
+  return `      ${renderInline(raw.trim())}`;
+}
+
+function renderInline(text: string): string {
+  return text
+    .replace(/`([^`]+)`/g, (_, code: string) => c.cyan(code))
+    .replace(/\*\*([^*]+)\*\*/g, (_, m: string) => c.bold(m))
+    .replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, (_, m: string) => c.dim(m));
+}
+
 function nextSteps(report: ScanReport, unsafe: boolean): string[] {
   const lines: string[] = [c.bold('다음 단계')];
   if (unsafe) {

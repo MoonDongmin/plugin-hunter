@@ -1,13 +1,17 @@
 import { scanLocalDir } from '../scanner/orchestrator.ts';
+import { detectSurfaceEscalation, type EscalationFinding } from '../scanner/escalation.ts';
 import { discoverAllPlugins, findPluginByName, type DiscoveredPlugin } from '../discovery/index.ts';
 import { diffHashes, loadRegistry, upsertEntry } from '../state/registry.ts';
 import { appendHistory } from '../state/history.ts';
-import { renderReport, isUnsafe } from '../reporter/terminal.ts';
+import { renderReport, renderRemediation, isUnsafe } from '../reporter/terminal.ts';
+import { generateRemediation } from '../analyzer/remediation.ts';
 import type { RegistryEntry } from '../state/types.ts';
+import type { Finding } from '../rules/types.ts';
 import { Spinner, alignColumns, badge, c, describeStage, hr, icon, statusBadge, termWidth } from './ui.ts';
 
 interface WatchOptions {
   quiet?: boolean;
+  noRemediation?: boolean;
 }
 
 export async function runWatchCommand(target: string, opts: WatchOptions, version: string): Promise<number> {
@@ -78,12 +82,37 @@ export async function runWatchCommand(target: string, opts: WatchOptions, versio
     }
 
     const { report, fileHashes } = result;
-    const unsafe = isUnsafe(report);
     let changedCount = 0;
+    let escalations: EscalationFinding[] = [];
 
     if (prev) {
       const diff = diffHashes(prev.fileHashes, fileHashes);
       changedCount = diff.added.length + diff.removed.length + diff.modified.length;
+
+      // Detection 과 무관한 deterministic rug-pull 신호:
+      // 직전엔 없던 high-surface 파일이 새로 등장한 케이스.
+      escalations = detectSurfaceEscalation(prev.fileHashes, fileHashes);
+      if (escalations.length > 0) {
+        const escFindings: Finding[] = escalations.map(e => ({
+          severity: 'HIGH',
+          ruleId: e.ruleId,
+          source: 'meta',
+          surface: 'high',
+          filePath: e.filePath,
+          snippet: e.filePath,
+          description: e.description,
+        }));
+        report.findings.push(...escFindings);
+        // highSurfaceSummary / summary 재계산 — 모두 HIGH 이므로 high 카운트만 증가.
+        report.highSurfaceSummary = {
+          ...report.highSurfaceSummary,
+          high: report.highSurfaceSummary.high + escFindings.length,
+        };
+        report.summary = {
+          ...report.summary,
+          high: report.summary.high + escFindings.length,
+        };
+      }
 
       if (!opts.quiet) {
         if (changedCount === 0) {
@@ -96,8 +125,17 @@ export async function runWatchCommand(target: string, opts: WatchOptions, versio
           for (const p of diff.modified) process.stderr.write(`    ${c.yellow('~')} ${p}\n`);
           for (const p of diff.removed) process.stderr.write(`    ${c.red('-')} ${p}\n`);
         }
+
+        if (escalations.length > 0) {
+          process.stderr.write(`\n  ${badge('SURFACE ↑', 'unsafe')} ${c.boldRed('새로운 attack surface 등장:')}\n`);
+          for (const e of escalations) {
+            process.stderr.write(`    ${c.red('!')} ${c.bold(e.filePath)} ${c.dim('(' + e.ruleId + ')')}\n`);
+          }
+        }
       }
     }
+
+    const unsafe = isUnsafe(report);
 
     const shouldRenderReport = !opts.quiet && (changedCount > 0 || !prev || unsafe);
     if (shouldRenderReport) {
@@ -106,6 +144,19 @@ export async function runWatchCommand(target: string, opts: WatchOptions, versio
 
     if (unsafe && prev?.status === 'clean') {
       process.stderr.write(`\n  ${badge('RUG-PULL', 'unsafe')} ${c.boldRed('이전엔 안전했으나 지금은 위험합니다:')} ${c.bold(plugin.id)}\n`);
+    }
+
+    // unsafe 면서 quiet 아니고 opt-out 도 안 한 경우에만 LLM 권장 조치 생성.
+    if (unsafe && !opts.quiet && opts.noRemediation !== true) {
+      const remSpinner = new Spinner();
+      remSpinner.start(describeStage('remediation', 'AI 권장 조치 생성 중'));
+      const remediation = await generateRemediation(report);
+      if (remediation) {
+        remSpinner.succeed();
+        process.stdout.write(renderRemediation(remediation) + '\n');
+      } else {
+        remSpinner.warn(describeStage('remediation-error', '생성 실패 — 건너뜀'));
+      }
     }
 
     const entry: RegistryEntry = {

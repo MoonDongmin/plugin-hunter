@@ -41,10 +41,12 @@ ${c.bold('Exit codes')}
     .argument('<url>', 'GitHub URL 또는 owner/repo 형식')
     .option('--json', 'JSON 형식으로 출력 (기본: 사람이 읽기 좋은 보고서)')
     .option('--no-save', '레지스트리에 결과를 저장하지 않음')
-    .action(async (url: string, opts: { json?: boolean; save?: boolean }) => {
+    .option('--no-remediation', 'unsafe 시 AI 권장 조치 생성 비활성화 (CI/스크립트용)')
+    .action(async (url: string, opts: { json?: boolean; save?: boolean; remediation?: boolean }) => {
       exitCode = await runScanCommand(url, {
         json: opts.json,
         noSave: opts.save === false,
+        noRemediation: opts.remediation === false,
       }, VERSION);
     });
 
@@ -60,8 +62,12 @@ ${c.bold('Exit codes')}
     .description('설치된 플러그인을 재검사 (rug-pull diff 포함)')
     .argument('<target>', '"all" 또는 플러그인 이름 / id')
     .option('--quiet', '요약만 출력 (hook 등 자동 실행용)')
-    .action(async (target: string, opts: { quiet?: boolean }) => {
-      exitCode = await runWatchCommand(target, { quiet: opts.quiet }, VERSION);
+    .option('--no-remediation', 'unsafe 시 AI 권장 조치 생성 비활성화 (CI/스크립트용)')
+    .action(async (target: string, opts: { quiet?: boolean; remediation?: boolean }) => {
+      exitCode = await runWatchCommand(target, {
+        quiet: opts.quiet,
+        noRemediation: opts.remediation === false,
+      }, VERSION);
     });
 
   program
