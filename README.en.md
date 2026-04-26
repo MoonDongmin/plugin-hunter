@@ -10,7 +10,7 @@ Catches malicious code in Claude Code · Codex CLI plugins **before** you instal
 
 [한국어](./README.md) · [npm](https://www.npmjs.com/package/plugin-hunter)
 
-> Submission for the **2026-04-26 CMUX × AIM Intelligence Hackathon Seoul** (AI Safety track)
+> Submission for the **2026-04-26 CMUX × AIM Intelligence Hackathon Seoul** (Developer Tooling)
 
 </div>
 
