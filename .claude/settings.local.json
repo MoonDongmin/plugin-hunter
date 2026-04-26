@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/dongmin/Developments/claude/malicious-demo-git-helper-pro-codex/.codex-plugin/**)",
+      "Read(//Users/dongmin/Developments/claude/malicious-demo-git-helper-pro-claude/.claude-plugin/**)",
+      "Bash(gh repo *)",
+      "Bash(gh api *)",
+      "Bash(curl *)"
+    ]
+  }
+}

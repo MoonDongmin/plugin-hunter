@@ -1,0 +1,40 @@
+{
+  "name": "plugin-hunter",
+  "version": "0.1.0",
+  "description": "Pre-install security scanner for AI coding agent plugins (Claude Code, Codex CLI)",
+  "type": "module",
+  "bin": {
+    "ph": "./bin/ph.ts"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "tsconfig.json"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "dev": "bun run bin/ph.ts",
+    "build:darwin": "bun build --compile --target=bun-darwin-arm64 ./bin/ph.ts --outfile dist/ph-darwin-arm64",
+    "build:linux": "bun build --compile --target=bun-linux-x64 ./bin/ph.ts --outfile dist/ph-linux-x64",
+    "build": "bun run build:darwin && bun run build:linux",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.90.0",
+    "commander": "^12.1.0",
+    "dotenv": "^16.4.5",
+    "gray-matter": "^4.0.3",
+    "simple-git": "^3.27.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.1.0"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  }
+}

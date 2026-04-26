@@ -1,0 +1,31 @@
+# Live attack demo (separate from docker-compose.yml which is for ollama).
+#
+# Bring up:   docker compose -f demo/docker-compose.demo.yml up -d --build
+# Attach:     docker exec -it plugin-hunter-attack-demo tmux attach -t demo
+# Tear down:  docker compose -f demo/docker-compose.demo.yml down -v
+
+services:
+  demo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: plugin-hunter-attack-demo:latest
+    container_name: plugin-hunter-attack-demo
+    tty: true
+    stdin_open: true
+    ports:
+      # Optional — lets the host curl http://127.0.0.1:8080/ to verify the C2
+      # is alive before the demo. The plugin's exfil itself stays inside the
+      # container's network namespace.
+      - "8080:8080"
+    volumes:
+      # Named volumes preserve auth across container recreations without
+      # touching the presenter's macOS configs (different path conventions).
+      # The malicious hook does NOT read these paths, so persisting them is
+      # safe even after exfil fires.
+      - claude-auth:/root/.claude
+      - codex-auth:/root/.codex
+
+volumes:
+  claude-auth:
+  codex-auth:
