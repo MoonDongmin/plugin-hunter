@@ -4,6 +4,7 @@ import { renderJson } from '../reporter/json.ts';
 import { upsertEntry } from '../state/registry.ts';
 import { appendHistory } from '../state/history.ts';
 import type { RegistryEntry } from '../state/types.ts';
+import { Spinner, c, describeStage, icon } from './ui.ts';
 
 interface ScanCommandOptions {
   json?: boolean;
@@ -12,20 +13,34 @@ interface ScanCommandOptions {
 
 export async function runScanCommand(url: string, opts: ScanCommandOptions, version: string): Promise<number> {
   const isJson = opts.json === true;
+
   if (!isJson) {
-    process.stderr.write(`▸ ${url} 검사 중\n`);
+    process.stderr.write(`\n${c.boldCyan('plugin-hunter')} ${c.dim('v' + version)}  ${c.gray('—')}  ${c.bold(url)}\n\n`);
   }
+
+  const spinner = new Spinner();
+  let stageActive = false;
 
   let result;
   try {
     result = await scanRepo(url, {
       onStage: isJson ? undefined : (stage, info) => {
-        process.stderr.write(`  · ${stage}${info ? ` — ${info}` : ''}\n`);
+        if (stage === 'claude-error') {
+          if (stageActive) spinner.fail();
+          spinner.warn(describeStage(stage, info));
+          stageActive = false;
+          return;
+        }
+        if (stageActive) spinner.succeed();
+        spinner.start(describeStage(stage, info));
+        stageActive = true;
       },
     });
+    if (!isJson && stageActive) spinner.succeed();
   } catch (err) {
+    if (!isJson && stageActive) spinner.fail();
     const msg = err instanceof Error ? err.message : String(err);
-    process.stderr.write(`✗ 검사 실패: ${msg}\n`);
+    process.stderr.write(`\n${c.red(icon.cross)} ${c.boldRed('검사 실패')} ${c.dim('—')} ${msg}\n`);
     return 2;
   }
 
@@ -62,7 +77,7 @@ export async function runScanCommand(url: string, opts: ScanCommandOptions, vers
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      process.stderr.write(`! 레지스트리 업데이트 실패: ${msg}\n`);
+      process.stderr.write(`${c.yellow(icon.warn)} ${c.dim('레지스트리 업데이트 실패: ' + msg)}\n`);
     }
   }
 

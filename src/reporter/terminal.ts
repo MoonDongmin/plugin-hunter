@@ -1,88 +1,138 @@
 import type { Finding, InstallSurface, ScanReport, Severity } from '../rules/types.ts';
 import type { ScanSource } from '../state/types.ts';
-
-const C = {
-  reset: '\x1b[0m',
-  bold: '\x1b[1m',
-  dim: '\x1b[2m',
-  red: '\x1b[31m',
-  yellow: '\x1b[33m',
-  cyan: '\x1b[36m',
-  green: '\x1b[32m',
-  magenta: '\x1b[35m',
-  gray: '\x1b[90m',
-};
-
-const SEV_COLOR: Record<Severity, string> = {
-  CRITICAL: C.red,
-  HIGH: C.magenta,
-  MEDIUM: C.yellow,
-  LOW: C.gray,
-};
+import {
+  alignColumns,
+  badge,
+  box,
+  c,
+  hr,
+  icon,
+  indentWrap,
+  severityBadge,
+  termWidth,
+  truncate,
+  visibleLength,
+} from '../cli/ui.ts';
 
 export function isUnsafe(report: ScanReport): boolean {
   return report.highSurfaceSummary.critical > 0 || report.highSurfaceSummary.high > 0;
 }
 
 export function renderReport(report: ScanReport, version: string): string {
-  const lines: string[] = [];
-  const bar = '━'.repeat(64);
-  lines.push(`${C.bold}${C.cyan}plugin-hunter v${version}${C.reset}`);
-  lines.push(C.cyan + bar + C.reset);
-  lines.push(`  ${C.bold}플러그인:${C.reset} ${report.pluginName} v${report.pluginVersion}`);
-  lines.push(`  ${C.bold}유형:${C.reset}     ${report.pluginType}`);
-  lines.push(`  ${C.bold}출처:${C.reset}     ${describeSource(report.source)}`);
-  lines.push(
-    `  ${C.bold}파일:${C.reset}     ${report.filesScanned}개 검사 · ` +
-    `설치 공격면 ${C.bold}${report.highSurfaceFiles}${C.reset}개`,
-  );
-  lines.push('');
+  const out: string[] = [];
+  const w = termWidth();
+  const unsafe = isUnsafe(report);
 
+  // ─── Brand line ──────────────────────────────────────────────────────────
+  out.push(`${c.boldCyan('plugin-hunter')} ${c.dim('v' + version)}`);
+  out.push(hr(w));
+
+  // ─── Verdict banner (always at top so it can't be missed) ────────────────
+  out.push(verdictBanner(report, unsafe, w));
+  out.push('');
+
+  // ─── Plugin metadata ─────────────────────────────────────────────────────
+  out.push(c.bold('플러그인 정보'));
+  const meta: string[][] = [
+    [c.dim('이름'), `${c.bold(report.pluginName)} ${c.dim('v' + report.pluginVersion)}`],
+    [c.dim('유형'), report.pluginType],
+    [c.dim('출처'), describeSource(report.source)],
+    [c.dim('파일'), `${report.filesScanned}개 검사 · 설치 공격면 ${c.bold(String(report.highSurfaceFiles))}개`],
+  ];
+  for (const line of alignColumns(meta, 2)) out.push('  ' + line);
+  out.push('');
+
+  // ─── Analyzer status ─────────────────────────────────────────────────────
   const claudeCount = report.findings.filter(f => f.source === 'claude').length;
-  lines.push(`  Claude 분석 ${C.green}✓${C.reset} (설치 공격면에서 ${claudeCount}개 finding)`);
-  lines.push('');
+  const symlinkCount = report.findings.filter(f => f.source === 'symlink').length;
+  const metaCount = report.findings.filter(f => f.source === 'meta').length;
+  const analyzerLine = [
+    `${c.green(icon.check)} Claude 분석 ${c.dim(`(${claudeCount} findings)`)}`,
+    symlinkCount > 0 ? `${c.yellow(icon.warn)} 심볼릭 링크 ${c.dim(`(${symlinkCount})`)}` : null,
+    metaCount > 0 ? `${c.gray(icon.info)} 메타 ${c.dim(`(${metaCount})`)}` : null,
+  ].filter(Boolean).join('   ');
+  out.push('  ' + analyzerLine);
+  out.push('');
 
+  // ─── High surface (verdict-driving) ──────────────────────────────────────
   const highFindings = report.findings.filter(f => f.surface === 'high');
   const lowFindings = report.findings.filter(f => f.surface === 'low');
 
-  // ─── High surface (verdict-driving) ──────────────────────────────
-  lines.push(
-    `${C.bold}${C.cyan}┃ 설치 공격면${C.reset} ${C.dim}` +
-    '— Claude/Codex가 세션 시작 시 자동 로드하는 파일' +
-    `${C.reset}`,
-  );
-  lines.push('');
+  out.push(c.bold('설치 공격면 ') + c.dim('— 세션 시작 시 자동 로드되는 파일'));
+  out.push('');
   if (highFindings.length === 0) {
-    lines.push(`  ${C.green}✓ 설치 공격면 깨끗함${C.reset}`);
-    lines.push('');
+    out.push(`  ${c.green(icon.check)} ${c.green('설치 공격면 깨끗함')}`);
+    out.push('');
   } else {
-    appendSeverityGroups(lines, highFindings, 'high');
+    appendSeverityGroups(out, highFindings, 'high');
   }
 
-  // ─── Low surface (informational) ─────────────────────────────────
+  // ─── Low surface (informational) ─────────────────────────────────────────
   if (lowFindings.length > 0) {
-    lines.push(
-      `${C.bold}${C.gray}┃ 대역 외${C.reset} ${C.dim}` +
-      '— 테스트/픽스처/문서/빌드 (사용자가 직접 실행할 때만 동작)' +
-      `${C.reset}`,
-    );
-    lines.push(`  ${C.dim}참고용 — 판정에 영향 없음${C.reset}`);
-    lines.push('');
-    appendSeverityGroups(lines, lowFindings, 'low');
+    out.push(c.bold(c.gray('대역 외 ')) + c.dim('— 테스트/픽스처/문서 (사용자가 직접 실행할 때만 동작, 판정에 영향 없음)'));
+    out.push('');
+    appendSeverityGroups(out, lowFindings, 'low');
   }
 
-  // ─── Verdict ────────────────────────────────────────────────────
-  const unsafe = isUnsafe(report);
-  const verdict = unsafe
-    ? `${C.bold}${C.red}결과: 위험${C.reset} — 이 플러그인을 설치하지 마세요.`
-    : `${C.bold}${C.green}결과: 안전${C.reset} — 설치 공격면에서 critical/high 이슈가 발견되지 않음.`;
-  lines.push(verdict);
-  lines.push(formatSummaryLine('설치 공격면', report.highSurfaceSummary));
+  // ─── Summary footer ──────────────────────────────────────────────────────
+  out.push(hr(w));
+  out.push(formatSummaryLine('설치 공격면', report.highSurfaceSummary));
   if (lowFindings.length > 0) {
-    lines.push(formatSummaryLine('대역 외    ', countByCategory(lowFindings)));
+    out.push(formatSummaryLine('대역 외    ', countByCategory(lowFindings)));
   }
-  lines.push(C.cyan + bar + C.reset);
-  return lines.join('\n');
+
+  // ─── Next steps ──────────────────────────────────────────────────────────
+  out.push('');
+  out.push(...nextSteps(report, unsafe));
+
+  return out.join('\n');
+}
+
+function verdictBanner(report: ScanReport, unsafe: boolean, width: number): string {
+  if (unsafe) {
+    const c1 = report.highSurfaceSummary.critical;
+    const h1 = report.highSurfaceSummary.high;
+    const counts: string[] = [];
+    if (c1 > 0) counts.push(c.boldRed(`critical ${c1}`));
+    if (h1 > 0) counts.push(c.boldMagenta(`high ${h1}`));
+    const countLine = counts.length > 0
+      ? `${c.dim('└─')} ${counts.join(c.dim(' · '))}`
+      : '';
+    return box({
+      title: `${badge('UNSAFE', 'unsafe')}  설치하지 마세요`,
+      lines: [
+        `${c.bold(report.pluginName)} ${c.dim('v' + report.pluginVersion)} ${c.dim('·')} ${c.dim(report.pluginType)}`,
+        '',
+        `${c.red(icon.cross)} 설치 공격면에서 ${c.bold('악성/의심 패턴')}이 발견되었습니다.`,
+        ...(countLine ? ['  ' + countLine] : []),
+      ],
+      kind: 'unsafe',
+      width,
+    });
+  }
+  return box({
+    title: `${badge('SAFE', 'safe')}  설치 가능`,
+    lines: [
+      `${c.bold(report.pluginName)} ${c.dim('v' + report.pluginVersion)} ${c.dim('·')} ${c.dim(report.pluginType)}`,
+      '',
+      `${c.green(icon.check)} 설치 공격면 ${c.dim('(hooks · skills · agents · commands · MCP)')} 깨끗`,
+      `  critical / high finding 없음`,
+    ],
+    kind: 'safe',
+    width,
+  });
+}
+
+function nextSteps(report: ScanReport, unsafe: boolean): string[] {
+  const lines: string[] = [c.bold('다음 단계')];
+  if (unsafe) {
+    lines.push(`  ${c.dim(icon.arrow)} 설치를 ${c.boldRed('중단')}하고 위 finding을 검토하세요.`);
+    lines.push(`  ${c.dim(icon.arrow)} 결과 공유: ${c.cyan('ph scan <url> --json')}`);
+  } else {
+    lines.push(`  ${c.dim(icon.arrow)} 설치 후 변경 모니터링: ${c.cyan('ph watch ' + report.pluginName)}`);
+    lines.push(`  ${c.dim(icon.arrow)} 전체 재검사:           ${c.cyan('ph watch all')}`);
+  }
+  return lines;
 }
 
 function appendSeverityGroups(lines: string[], findings: Finding[], _surface: InstallSurface): void {
@@ -90,8 +140,7 @@ function appendSeverityGroups(lines: string[], findings: Finding[], _surface: In
   for (const sev of groups) {
     const items = findings.filter(f => f.severity === sev);
     if (items.length === 0) continue;
-    const color = SEV_COLOR[sev];
-    lines.push(`  ${color}${C.bold}${sev}${C.reset} (${items.length})`);
+    lines.push(`  ${severityBadge(sev)} ${c.dim('×')} ${c.bold(String(items.length))}`);
     for (const f of items) {
       lines.push(formatFinding(f));
     }
@@ -101,17 +150,20 @@ function appendSeverityGroups(lines: string[], findings: Finding[], _surface: In
 
 function formatFinding(f: Finding): string {
   const sourceTag = sourceTagFor(f.source);
-  const line = f.lineNumber !== undefined ? `:${f.lineNumber}` : '';
-  const head = `    ${sourceTag} ${C.bold}${f.ruleId}${C.reset}  ${f.filePath}${line}`;
-  const body = `         ${C.dim}"${truncate(f.snippet, 110)}"${C.reset}`;
-  const desc = `         ${f.description}`;
+  const line = f.lineNumber !== undefined ? c.dim(`:${f.lineNumber}`) : '';
+  const w = termWidth();
+  const head = `      ${sourceTag} ${c.bold(f.ruleId)}  ${c.cyan(f.filePath)}${line}`;
+  const snippetMax = Math.max(40, w - 12);
+  const body = `        ${c.dim('▸ ' + truncate(`"${f.snippet}"`, snippetMax))}`;
+  // description은 길어질 수 있으므로 들여쓰기를 유지하며 wrap
+  const desc = indentWrap(f.description, '        ', w);
   return [head, body, desc].join('\n');
 }
 
 function sourceTagFor(source: Finding['source']): string {
-  if (source === 'symlink') return `${C.yellow}[symlink]${C.reset}`;
-  if (source === 'meta') return `${C.gray}[meta]${C.reset}   `;
-  return `${C.magenta}[claude]${C.reset} `;
+  if (source === 'symlink') return c.yellow('[symlink]');
+  if (source === 'meta') return c.gray('[meta]   ');
+  return c.magenta('[claude] ');
 }
 
 function countByCategory(findings: Finding[]): { critical: number; high: number; medium: number; low: number } {
@@ -125,16 +177,16 @@ function countByCategory(findings: Finding[]): { critical: number; high: number;
   return out;
 }
 
-function formatSummaryLine(label: string, c: { critical: number; high: number; medium: number; low: number }): string {
-  return `  ${C.bold}${label}:${C.reset}  ` +
-    `${C.red}critical=${c.critical}${C.reset}  ` +
-    `${C.magenta}high=${c.high}${C.reset}  ` +
-    `${C.yellow}medium=${c.medium}${C.reset}  ` +
-    `${C.gray}low=${c.low}${C.reset}`;
-}
-
-function truncate(s: string, n: number): string {
-  return s.length > n ? s.slice(0, n - 1) + '…' : s;
+function formatSummaryLine(label: string, n: { critical: number; high: number; medium: number; low: number }): string {
+  // 0인 카테고리는 dim 처리해서 한눈에 들어오는 숫자만 강조
+  const fmt = (label: string, count: number, color: (s: string) => string) =>
+    count > 0 ? color(`${label} ${count}`) : c.dim(`${label} ${count}`);
+  return `  ${c.bold(label + ':')}  ` + [
+    fmt('critical', n.critical, c.boldRed),
+    fmt('high', n.high, c.boldMagenta),
+    fmt('medium', n.medium, c.boldYellow),
+    fmt('low', n.low, c.boldGray),
+  ].join('  ');
 }
 
 function describeSource(s: ScanSource): string {
@@ -142,14 +194,17 @@ function describeSource(s: ScanSource): string {
     case 'github':
       return s.url;
     case 'installed-claude':
-      return `claude-installed (${s.marketplace}) — ${s.installPath}`;
+      return `claude-installed ${c.dim('(' + s.marketplace + ')')}  ${c.dim(s.installPath)}`;
     case 'installed-codex':
-      return `codex-installed (${s.marketplace}) — ${s.installPath}`;
+      return `codex-installed ${c.dim('(' + s.marketplace + ')')}  ${c.dim(s.installPath)}`;
     case 'codex-skill':
-      return `codex skill — ${s.installPath}`;
+      return `codex skill  ${c.dim(s.installPath)}`;
     case 'codex-rule':
-      return `codex rule — ${s.installPath}`;
+      return `codex rule  ${c.dim(s.installPath)}`;
     case 'codex-memory':
-      return `codex memory — ${s.installPath}`;
+      return `codex memory  ${c.dim(s.installPath)}`;
   }
 }
+
+// visibleLength is exported via `cli/ui.ts` and used internally only — keep import alive
+void visibleLength;

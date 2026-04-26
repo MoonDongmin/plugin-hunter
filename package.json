@@ -9,7 +9,9 @@
   "files": [
     "bin",
     "src",
+    "assets",
     "README.md",
+    "README.en.md",
     "tsconfig.json"
   ],
   "publishConfig": {
