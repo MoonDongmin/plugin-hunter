@@ -368,10 +368,12 @@ const STAGE_LABELS: Record<string, string> = {
   clone: '레포지토리 클론',
   detect: '플러그인 탐지',
   collect: '대상 파일 수집',
-  claude: 'Claude로 의미 분석',
-  'claude-error': 'Claude 분석 실패',
+  judge: 'LLM judge 의미 분석',
+  'judge-error': 'LLM judge 분석 실패',
   remediation: 'AI 권장 조치 생성',
   'remediation-error': 'AI 권장 조치 생성 실패',
+  upstream: 'Upstream marketplace drift 검사',
+  'upstream-error': 'Upstream drift 검사 실패',
 };
 
 export function describeStage(stage: string, info?: string): string {

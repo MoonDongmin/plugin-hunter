@@ -6,6 +6,7 @@ export type ScanSource =
       kind: 'installed-claude';
       marketplace: string;
       installPath: string;
+      marketplaceDir?: string;
       gitRepo?: string;
     }
   | {

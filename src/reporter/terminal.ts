@@ -1,4 +1,4 @@
-import type { Finding, InstallSurface, ScanReport, Severity } from '../rules/types.ts';
+import type { Finding, InstallSurface, ScanReport, Severity, UpstreamReport } from '../rules/types.ts';
 import type { ScanSource } from '../state/types.ts';
 import {
   alignColumns,
@@ -15,7 +15,24 @@ import {
 } from '../cli/ui.ts';
 
 export function isUnsafe(report: ScanReport): boolean {
-  return report.highSurfaceSummary.critical > 0 || report.highSurfaceSummary.high > 0;
+  if (report.highSurfaceSummary.critical > 0 || report.highSurfaceSummary.high > 0) return true;
+  return upstreamHasHighSurfaceFinding(report);
+}
+
+/**
+ * cache 자체는 안전(`cacheUnsafe === false`)인데 marketplace dir 의 다음 update 후보가 위험한 케이스.
+ * `[PRE-RUG-PULL]` 배지를 띄울지 결정하는 단일 진실 기준.
+ */
+export function isPreRugPull(report: ScanReport): boolean {
+  const cacheUnsafe = report.highSurfaceSummary.critical > 0 || report.highSurfaceSummary.high > 0;
+  return !cacheUnsafe && upstreamHasHighSurfaceFinding(report);
+}
+
+function upstreamHasHighSurfaceFinding(report: ScanReport): boolean {
+  if (!report.upstream) return false;
+  return report.upstream.findings.some(
+    f => f.surface === 'high' && (f.severity === 'CRITICAL' || f.severity === 'HIGH'),
+  );
 }
 
 export function renderReport(report: ScanReport, version: string): string {
@@ -43,11 +60,11 @@ export function renderReport(report: ScanReport, version: string): string {
   out.push('');
 
   // ─── Analyzer status ─────────────────────────────────────────────────────
-  const claudeCount = report.findings.filter(f => f.source === 'claude').length;
+  const judgeCount = report.findings.filter(f => f.source === 'claude' || f.source === 'codex' || f.source === 'gemini').length;
   const symlinkCount = report.findings.filter(f => f.source === 'symlink').length;
   const metaCount = report.findings.filter(f => f.source === 'meta').length;
   const analyzerLine = [
-    `${c.green(icon.check)} Claude 분석 ${c.dim(`(${claudeCount} findings)`)}`,
+    `${c.green(icon.check)} LLM judge ${c.dim(`(${judgeCount} findings)`)}`,
     symlinkCount > 0 ? `${c.yellow(icon.warn)} 심볼릭 링크 ${c.dim(`(${symlinkCount})`)}` : null,
     metaCount > 0 ? `${c.gray(icon.info)} 메타 ${c.dim(`(${metaCount})`)}` : null,
   ].filter(Boolean).join('   ');
@@ -74,6 +91,11 @@ export function renderReport(report: ScanReport, version: string): string {
     appendSeverityGroups(out, lowFindings, 'low');
   }
 
+  // ─── Upstream (marketplace dir 의 다음 update 후보) ────────────────────────
+  if (report.upstream && report.upstream.findings.length > 0) {
+    appendUpstreamSection(out, report.upstream);
+  }
+
   // ─── Summary footer ──────────────────────────────────────────────────────
   out.push(hr(w));
   out.push(formatSummaryLine('설치 공격면', report.highSurfaceSummary));
@@ -89,6 +111,30 @@ export function renderReport(report: ScanReport, version: string): string {
 }
 
 function verdictBanner(report: ScanReport, unsafe: boolean, width: number): string {
+  const preRugPull = isPreRugPull(report);
+
+  if (preRugPull) {
+    const upHigh = (report.upstream?.findings ?? []).filter(f => f.surface === 'high');
+    const c1 = upHigh.filter(f => f.severity === 'CRITICAL').length;
+    const h1 = upHigh.filter(f => f.severity === 'HIGH').length;
+    const counts: string[] = [];
+    if (c1 > 0) counts.push(c.boldRed(`upstream critical ${c1}`));
+    if (h1 > 0) counts.push(c.boldMagenta(`upstream high ${h1}`));
+    const countLine = counts.length > 0 ? `${c.dim('└─')} ${counts.join(c.dim(' · '))}` : '';
+    return box({
+      title: `${badge('PRE-RUG-PULL', 'unsafe')}  업데이트 차단 권장`,
+      lines: [
+        `${c.bold(report.pluginName)} ${c.dim('v' + report.pluginVersion)} ${c.dim('·')} ${c.dim(report.pluginType)}`,
+        '',
+        `${c.yellow(icon.warn)} 현재 cache 는 ${c.bold('안전')} 하지만 marketplace 가 위험한 변경을 가지고 있습니다.`,
+        `  ${c.dim('다음 /plugin update 시 cache 로 복사되어 SessionStart 등에서 즉시 실행됩니다.')}`,
+        ...(countLine ? ['  ' + countLine] : []),
+      ],
+      kind: 'unsafe',
+      width,
+    });
+  }
+
   if (unsafe) {
     const c1 = report.highSurfaceSummary.critical;
     const h1 = report.highSurfaceSummary.high;
@@ -146,7 +192,7 @@ export function renderRemediation(text: string): string {
   const out: string[] = [];
   out.push('');
   out.push(hr(w));
-  out.push(`  ${c.boldCyan(icon.diamond + ' AI 권장 조치')}  ${c.dim('Claude 가 finding 기반 생성')}`);
+  out.push(`  ${c.boldCyan(icon.diamond + ' AI 권장 조치')}  ${c.dim('LLM judge가 finding 기반 생성')}`);
   out.push(hr(w));
 
   for (const raw of text.split('\n')) {
@@ -216,14 +262,36 @@ function renderInline(text: string): string {
 
 function nextSteps(report: ScanReport, unsafe: boolean): string[] {
   const lines: string[] = [c.bold('다음 단계')];
-  if (unsafe) {
+  if (isPreRugPull(report)) {
+    lines.push(`  ${c.dim(icon.arrow)} 현재 cache 는 안전하므로 ${c.bold('지금 당장의 위험은 없음')} — 단 다음 update 차단 필요.`);
+    lines.push(`  ${c.dim(icon.arrow)} ${c.boldRed('/plugin update ' + report.pluginName + ' 을(를) 실행하지 마세요.')} marketplace 변경의 정상 여부를 작성자에게 확인 후 결정.`);
+    lines.push(`  ${c.dim(icon.arrow)} marketplace 코드 직접 검토: ${c.cyan('cat ' + (report.upstream?.marketplaceDir ?? '') + '/hooks/hooks.json')}`);
+  } else if (unsafe) {
     lines.push(`  ${c.dim(icon.arrow)} 설치를 ${c.boldRed('중단')}하고 위 finding을 검토하세요.`);
-    lines.push(`  ${c.dim(icon.arrow)} 결과 공유: ${c.cyan('ph scan <url> --json')}`);
   } else {
-    lines.push(`  ${c.dim(icon.arrow)} 설치 후 변경 모니터링: ${c.cyan('ph watch ' + report.pluginName)}`);
-    lines.push(`  ${c.dim(icon.arrow)} 전체 재검사:           ${c.cyan('ph watch all')}`);
+    lines.push(`  ${c.dim(icon.arrow)} 설치 후 변경 모니터링: ${c.cyan('ph watch claude ' + report.pluginName)}`);
+    lines.push(`  ${c.dim(icon.arrow)} 전체 재검사:           ${c.cyan('ph watch claude all')}`);
   }
   return lines;
+}
+
+function appendUpstreamSection(lines: string[], up: UpstreamReport): void {
+  const driftCount = up.drift.added.length + up.drift.modified.length + up.drift.removed.length;
+  lines.push(c.bold('Upstream ') + c.dim(`— marketplace dir 의 변경 (${driftCount}개) · 다음 /plugin update 시 cache 로 적용`));
+  lines.push(`  ${c.dim(up.marketplaceDir)}`);
+
+  if (up.drift.added.length > 0) {
+    for (const p of up.drift.added) lines.push(`    ${c.green('+')} ${p}`);
+  }
+  if (up.drift.modified.length > 0) {
+    for (const p of up.drift.modified) lines.push(`    ${c.yellow('~')} ${p}`);
+  }
+  if (up.drift.removed.length > 0) {
+    for (const p of up.drift.removed) lines.push(`    ${c.red('-')} ${p}`);
+  }
+  lines.push('');
+
+  appendSeverityGroups(lines, up.findings, 'high');
 }
 
 function appendSeverityGroups(lines: string[], findings: Finding[], _surface: InstallSurface): void {
@@ -254,7 +322,7 @@ function formatFinding(f: Finding): string {
 function sourceTagFor(source: Finding['source']): string {
   if (source === 'symlink') return c.yellow('[symlink]');
   if (source === 'meta') return c.gray('[meta]   ');
-  return c.magenta('[claude] ');
+  return c.magenta(`[${source}]`.padEnd(9));
 }
 
 function countByCategory(findings: Finding[]): { critical: number; high: number; medium: number; low: number } {

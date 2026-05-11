@@ -26,6 +26,7 @@ export function discoverAllPlugins(): DiscoveredPlugin[] {
         kind: 'installed-claude',
         marketplace: p.marketplace,
         installPath: p.installPath,
+        marketplaceDir: p.marketplaceDir,
         gitRepo: p.marketplaceRepo,
       },
       group: 'claude',

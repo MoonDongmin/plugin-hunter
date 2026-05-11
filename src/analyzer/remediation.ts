@@ -1,10 +1,7 @@
-import Anthropic from '@anthropic-ai/sdk';
 import type { ScanReport } from '../rules/types.ts';
+import type { LlmJudge } from './judges/types.ts';
 
-const MODEL = 'claude-sonnet-4-6';
-const MAX_TOKENS = 1024;
-
-const SYSTEM_PROMPT = `당신은 AI 코딩 에이전트(Claude Code, Codex CLI) 플러그인 보안 사고 대응 가이드입니다.
+const SYSTEM_PROMPT = `당신은 AI 코딩 에이전트(Claude Code, Codex CLI, Gemini CLI) 플러그인 보안 사고 대응 가이드입니다.
 사용자는 방금 자신이 설치했거나 설치하려던 플러그인이 unsafe 판정을 받았습니다.
 findings 리스트를 입력받아, 사용자가 즉시 따를 수 있는 한국어 markdown 가이드를 작성하세요.
 
@@ -21,15 +18,17 @@ findings 리스트를 입력받아, 사용자가 즉시 따를 수 있는 한국
 - 각 섹션은 짧게, 불릿/번호 사용. 전체 600 토큰 미만 권장.
 - 단호하고 명확하게. 군더더기 없음.`;
 
-export async function generateRemediation(report: ScanReport): Promise<string | null> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return null;
+export type RemediationResult =
+  | { kind: 'ok'; text: string }
+  | { kind: 'skipped'; reason: 'no-findings' | 'empty-response' }
+  | { kind: 'error'; error: string };
 
+export async function generateRemediation(report: ScanReport, judge: LlmJudge): Promise<RemediationResult> {
   const findings = report.findings
     .filter(f => f.surface === 'high' && (f.severity === 'CRITICAL' || f.severity === 'HIGH'))
     .slice(0, 30);
 
-  if (findings.length === 0) return null;
+  if (findings.length === 0) return { kind: 'skipped', reason: 'no-findings' };
 
   const userMessage = [
     `Plugin: ${report.pluginName} v${report.pluginVersion} (${report.pluginType})`,
@@ -46,25 +45,11 @@ export async function generateRemediation(report: ScanReport): Promise<string | 
   ].join('\n');
 
   try {
-    const client = new Anthropic({ apiKey });
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      system: [
-        {
-          type: 'text',
-          text: SYSTEM_PROMPT,
-          cache_control: { type: 'ephemeral' },
-        },
-      ],
-      messages: [{ role: 'user', content: userMessage }],
-    });
-
-    const textBlock = response.content.find(b => b.type === 'text');
-    if (!textBlock || textBlock.type !== 'text') return null;
-    const text = textBlock.text.trim();
-    return text.length > 0 ? text : null;
-  } catch {
-    return null;
+    const text = (await judge.invoke(SYSTEM_PROMPT, userMessage)).trim();
+    if (text.length === 0) return { kind: 'skipped', reason: 'empty-response' };
+    return { kind: 'ok', text };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { kind: 'error', error: `${judge.name} CLI 호출 실패 — ${message}` };
   }
 }

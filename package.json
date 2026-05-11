@@ -1,33 +1,35 @@
 {
   "name": "plugin-hunter",
-  "version": "0.1.0",
-  "description": "Pre-install security scanner for AI coding agent plugins (Claude Code, Codex CLI)",
+  "version": "1.0.0",
+  "description": "ph — Scan Claude Code / Codex CLI / Gemini CLI plugins for malicious hooks, poisoned SKILL.md, and MCP tool-poisoning *before* you install. Uses your local LLM CLI as the judge — no API key required.",
   "type": "module",
   "bin": {
-    "ph": "./bin/ph.ts"
+    "ph": "./dist/cli.js"
   },
   "files": [
-    "bin",
-    "src",
+    "dist/cli.js",
     "assets",
     "README.md",
     "README.en.md",
-    "tsconfig.json"
+    "LICENSE"
   ],
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
     "dev": "bun run bin/ph.ts",
+    "build:node": "bun build ./bin/ph.ts --target=node --outfile dist/cli.js && bun run scripts/postbuild-node.ts dist/cli.js",
     "build:darwin": "bun build --compile --target=bun-darwin-arm64 ./bin/ph.ts --outfile dist/ph-darwin-arm64",
     "build:linux": "bun build --compile --target=bun-linux-x64 ./bin/ph.ts --outfile dist/ph-linux-x64",
-    "build": "bun run build:darwin && bun run build:linux",
+    "build": "bun run build:node && bun run build:darwin && bun run build:linux",
+    "readme:swap": "bun run scripts/swap-readme-for-publish.ts swap",
+    "readme:restore": "bun run scripts/swap-readme-for-publish.ts restore",
+    "prepublishOnly": "bun run build:node && bun run readme:swap",
+    "postpublish": "bun run readme:restore",
     "test": "vitest run"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.90.0",
     "commander": "^12.1.0",
-    "dotenv": "^16.4.5",
     "gray-matter": "^4.0.3",
     "simple-git": "^3.27.0"
   },
@@ -37,6 +39,30 @@
     "vitest": "^2.1.0"
   },
   "engines": {
+    "node": ">=18",
     "bun": ">=1.1.0"
+  },
+  "keywords": [
+    "security",
+    "scanner",
+    "claude-code",
+    "codex",
+    "codex-cli",
+    "gemini-cli",
+    "plugin",
+    "supply-chain",
+    "prompt-injection",
+    "mcp",
+    "cli"
+  ],
+  "author": "MoonDongmin",
+  "license": "MIT",
+  "homepage": "https://github.com/MoonDongmin/plugin-hunter#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MoonDongmin/plugin-hunter.git"
+  },
+  "bugs": {
+    "url": "https://github.com/MoonDongmin/plugin-hunter/issues"
   }
 }

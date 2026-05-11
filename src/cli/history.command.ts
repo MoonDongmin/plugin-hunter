@@ -15,7 +15,7 @@ export function runHistoryCommand(opts: HistoryCommandOptions): number {
     process.stdout.write(hr(w) + '\n');
     process.stdout.write(`  ${c.dim('이력이 없습니다.')}\n`);
     process.stdout.write(`  ${c.dim('파일 위치:')} ${c.cyan(getHistoryPath())}\n`);
-    process.stdout.write(`  ${c.dim(icon.arrow + ' 첫 검사:')} ${c.cyan('ph scan <github-url>')}\n\n`);
+    process.stdout.write(`  ${c.dim(icon.arrow + ' 첫 검사:')} ${c.cyan('ph scan claude <github-url>')}\n\n`);
     return 0;
   }
 

@@ -5,7 +5,9 @@
       "Read(//Users/dongmin/Developments/claude/malicious-demo-git-helper-pro-claude/.claude-plugin/**)",
       "Bash(gh repo *)",
       "Bash(gh api *)",
-      "Bash(curl *)"
+      "Bash(curl *)",
+      "Bash(bunx tsc *)",
+      "Bash(bun test *)"
     ]
   }
 }

@@ -34,6 +34,8 @@ const HIGH_SURFACE_ROLES: ReadonlySet<FileRole> = new Set<FileRole>([
   'GITMODULES',
 ]);
 
+export { HIGH_SURFACE_ROLES };
+
 const MAX_FILE_BYTES = 200_000;
 const SKIP_DIRS = new Set(['.git', 'node_modules', 'dist', 'build', '.next', '.turbo', 'coverage', '.cache']);
 const TEXT_EXTENSIONS = new Set([

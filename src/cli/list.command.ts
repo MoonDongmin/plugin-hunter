@@ -82,13 +82,13 @@ export function runListCommand(): number {
 
   if (discovered.length === 0 && orphans.length === 0) {
     process.stdout.write(`  ${c.dim('설치된 플러그인이 없습니다.')}\n`);
-    process.stdout.write(`  ${c.dim('GitHub URL을 직접 검사하려면:')} ${c.cyan('ph scan <url>')}\n\n`);
+    process.stdout.write(`  ${c.dim('GitHub URL을 직접 검사하려면:')} ${c.cyan('ph scan claude <url>')}\n\n`);
     return 0;
   }
 
   process.stdout.write(hr(w) + '\n');
-  process.stdout.write(`  ${c.dim(icon.arrow + ' 모든 플러그인 재검사:')} ${c.cyan('ph watch all')}\n`);
-  process.stdout.write(`  ${c.dim(icon.arrow + ' 한 개만 재검사:       ')} ${c.cyan('ph watch <name>')}\n\n`);
+  process.stdout.write(`  ${c.dim(icon.arrow + ' 모든 플러그인 재검사:')} ${c.cyan('ph watch claude all')}\n`);
+  process.stdout.write(`  ${c.dim(icon.arrow + ' 한 개만 재검사:       ')} ${c.cyan('ph watch claude <name>')}\n\n`);
   return 0;
 }
 

@@ -10,6 +10,7 @@ export interface ClaudeInstalledPlugin {
   version: string;
   gitCommitSha?: string;
   marketplaceRepo?: string;
+  marketplaceDir?: string;
 }
 
 interface InstalledPluginsFile {
@@ -51,7 +52,7 @@ export function discoverClaudePlugins(): ClaudeInstalledPlugin[] {
   }
   if (!parsed.plugins || typeof parsed.plugins !== 'object') return [];
 
-  const marketRepos = loadMarketplaceRepos();
+  const marketRepos = loadMarketplaceMeta();
   const out: ClaudeInstalledPlugin[] = [];
 
   for (const [key, scopes] of Object.entries(parsed.plugins)) {
@@ -64,6 +65,7 @@ export function discoverClaudePlugins(): ClaudeInstalledPlugin[] {
       if (!scope.installPath || typeof scope.installPath !== 'string') continue;
       if (!isExistingDir(scope.installPath)) continue;
 
+      const meta = marketRepos[marketplace];
       out.push({
         id: `${name}@${marketplace}`,
         name,
@@ -71,7 +73,8 @@ export function discoverClaudePlugins(): ClaudeInstalledPlugin[] {
         installPath: scope.installPath,
         version: scope.version ?? '0.0.0',
         gitCommitSha: scope.gitCommitSha,
-        marketplaceRepo: marketRepos[marketplace],
+        marketplaceRepo: meta?.repo,
+        marketplaceDir: meta?.installLocation && isExistingDir(meta.installLocation) ? meta.installLocation : undefined,
       });
     }
   }
@@ -85,14 +88,22 @@ function splitKey(key: string): { name: string; marketplace: string } | null {
   return { name: key.slice(0, idx), marketplace: key.slice(idx + 1) };
 }
 
-function loadMarketplaceRepos(): Record<string, string> {
+interface MarketplaceMeta {
+  repo?: string;
+  installLocation?: string;
+}
+
+function loadMarketplaceMeta(): Record<string, MarketplaceMeta> {
   if (!existsSync(KNOWN_MARKETPLACES_PATH)) return {};
   try {
     const parsed = JSON.parse(readFileSync(KNOWN_MARKETPLACES_PATH, 'utf8')) as KnownMarketplacesFile;
-    const out: Record<string, string> = {};
+    const out: Record<string, MarketplaceMeta> = {};
     for (const [name, entry] of Object.entries(parsed)) {
-      const repo = entry?.source?.repo;
-      if (typeof repo === 'string') out[name] = repo;
+      if (!entry) continue;
+      out[name] = {
+        repo: typeof entry.source?.repo === 'string' ? entry.source.repo : undefined,
+        installLocation: typeof entry.installLocation === 'string' ? entry.installLocation : undefined,
+      };
     }
     return out;
   } catch {

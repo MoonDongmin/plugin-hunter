@@ -1,5 +1,4 @@
 import { Command } from 'commander';
-import { config as loadDotenv } from 'dotenv';
 import { runScanCommand } from './scan.command.ts';
 import { runListCommand } from './list.command.ts';
 import { runWatchCommand } from './watch.command.ts';
@@ -7,26 +6,24 @@ import { runHistoryCommand } from './history.command.ts';
 import { runClearCommand } from './clear.command.ts';
 import { c } from './ui.ts';
 
-const VERSION = '0.1.0';
+const VERSION = '1.0.0';
 
 export async function runCli(argv: string[]): Promise<number> {
-  loadDotenv();
-
   const program = new Command();
   program
     .name('ph')
     .description(
       `${c.boldCyan('plugin-hunter')} ${c.dim('v' + VERSION)}\n` +
-      'AI 코딩 에이전트 플러그인 설치 전 보안 검사기 (Claude Code · Codex CLI)',
+      'AI 코딩 에이전트 플러그인 설치 전 보안 검사기 (Claude Code · Codex CLI · Gemini CLI)',
     )
     .version(VERSION)
     .addHelpText('after', `
 ${c.bold('예시')}
-  ${c.cyan('ph scan')} owner/repo                      ${c.dim('# GitHub 플러그인 1회 검사')}
-  ${c.cyan('ph scan')} https://github.com/x/y --json   ${c.dim('# JSON 출력 (CI/스크립트용)')}
+  ${c.cyan('ph scan claude')} owner/repo               ${c.dim('# Claude Code로 GitHub 플러그인 1회 검사')}
+  ${c.cyan('ph scan codex')} https://github.com/x/y   ${c.dim('# Codex CLI를 judge로 검사')}
   ${c.cyan('ph ls')}                                   ${c.dim('# 설치된 플러그인 전체 보기')}
-  ${c.cyan('ph watch')} all                            ${c.dim('# 모두 재검사 + rug-pull diff')}
-  ${c.cyan('ph watch')} ralph-loop                     ${c.dim('# 한 개만 재검사')}
+  ${c.cyan('ph watch claude')} all                     ${c.dim('# Claude Code로 모두 재검사 + rug-pull diff')}
+  ${c.cyan('ph watch codex')} ralph-loop               ${c.dim('# Codex로 한 개만 재검사')}
   ${c.cyan('ph history')} --limit 50                   ${c.dim('# 최근 50건 검사 이력')}
 
 ${c.bold('Exit codes')}
@@ -38,13 +35,12 @@ ${c.bold('Exit codes')}
   program
     .command('scan')
     .description('GitHub 플러그인 레포지토리에서 악성 패턴 검사')
+    .argument('<judge>', '판정에 사용할 LLM CLI: claude | codex | gemini')
     .argument('<url>', 'GitHub URL 또는 owner/repo 형식')
-    .option('--json', 'JSON 형식으로 출력 (기본: 사람이 읽기 좋은 보고서)')
     .option('--no-save', '레지스트리에 결과를 저장하지 않음')
     .option('--no-remediation', 'unsafe 시 AI 권장 조치 생성 비활성화 (CI/스크립트용)')
-    .action(async (url: string, opts: { json?: boolean; save?: boolean; remediation?: boolean }) => {
-      exitCode = await runScanCommand(url, {
-        json: opts.json,
+    .action(async (judge: string, url: string, opts: { save?: boolean; remediation?: boolean }) => {
+      exitCode = await runScanCommand(judge, url, {
         noSave: opts.save === false,
         noRemediation: opts.remediation === false,
       }, VERSION);
@@ -60,13 +56,16 @@ ${c.bold('Exit codes')}
   program
     .command('watch')
     .description('설치된 플러그인을 재검사 (rug-pull diff 포함)')
+    .argument('<judge>', '판정에 사용할 LLM CLI: claude | codex | gemini')
     .argument('<target>', '"all" 또는 플러그인 이름 / id')
     .option('--quiet', '요약만 출력 (hook 등 자동 실행용)')
     .option('--no-remediation', 'unsafe 시 AI 권장 조치 생성 비활성화 (CI/스크립트용)')
-    .action(async (target: string, opts: { quiet?: boolean; remediation?: boolean }) => {
-      exitCode = await runWatchCommand(target, {
+    .option('--no-upstream', 'marketplace dir 과의 drift 비교 비활성화 (judge CLI 호출 절감)')
+    .action(async (judge: string, target: string, opts: { quiet?: boolean; remediation?: boolean; upstream?: boolean }) => {
+      exitCode = await runWatchCommand(judge, target, {
         quiet: opts.quiet,
         noRemediation: opts.remediation === false,
+        noUpstream: opts.upstream === false,
       }, VERSION);
     });
 
