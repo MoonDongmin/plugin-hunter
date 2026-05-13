@@ -1,5 +1,6 @@
 import { loadHistory, getHistoryPath } from '../state/history.ts';
 import { alignColumns, c, hr, icon, statusBadge, termWidth, truncate } from './ui.ts';
+import { L } from '../i18n/index.ts';
 
 interface HistoryCommandOptions {
   limit?: string;
@@ -11,11 +12,11 @@ export function runHistoryCommand(opts: HistoryCommandOptions): number {
   const w = termWidth();
 
   if (all.length === 0) {
-    process.stdout.write(`\n${c.boldCyan('plugin-hunter')} ${c.dim('— 검사 이력')}\n`);
+    process.stdout.write(`\n${c.boldCyan('plugin-hunter')} ${c.dim(L('— scan history', '— 검사 이력'))}\n`);
     process.stdout.write(hr(w) + '\n');
-    process.stdout.write(`  ${c.dim('이력이 없습니다.')}\n`);
-    process.stdout.write(`  ${c.dim('파일 위치:')} ${c.cyan(getHistoryPath())}\n`);
-    process.stdout.write(`  ${c.dim(icon.arrow + ' 첫 검사:')} ${c.cyan('ph scan claude <github-url>')}\n\n`);
+    process.stdout.write(`  ${c.dim(L('No history.', '이력이 없습니다.'))}\n`);
+    process.stdout.write(`  ${c.dim(L('File path:', '파일 위치:'))} ${c.cyan(getHistoryPath())}\n`);
+    process.stdout.write(`  ${c.dim(icon.arrow + L(' first scan:', ' 첫 검사:'))} ${c.cyan('ph scan claude <github-url>')}\n\n`);
     return 0;
   }
 
@@ -24,10 +25,9 @@ export function runHistoryCommand(opts: HistoryCommandOptions): number {
     : all;
 
   const limit = parseLimit(opts.limit, 20);
-  // 최근 → 오래된 순으로
   const view = filtered.slice(-limit).reverse();
 
-  process.stdout.write(`\n${c.boldCyan('plugin-hunter')} ${c.dim('— 검사 이력')} ${c.dim(`(최근 ${view.length} / 전체 ${filtered.length})`)}\n`);
+  process.stdout.write(`\n${c.boldCyan('plugin-hunter')} ${c.dim(L('— scan history', '— 검사 이력'))} ${c.dim(L(`(latest ${view.length} / total ${filtered.length})`, `(최근 ${view.length} / 전체 ${filtered.length})`))}\n`);
   process.stdout.write(hr(w) + '\n');
 
   // 컬럼: timestamp, status, plugin id, severities, changed
@@ -57,7 +57,7 @@ export function runHistoryCommand(opts: HistoryCommandOptions): number {
     process.stdout.write(`  ${line}\n`);
   }
   process.stdout.write('\n');
-  process.stdout.write(`  ${c.dim('표 범례: ')}${c.boldRed('c')}${c.dim('=critical ')}${c.boldMagenta('h')}${c.dim('=high ')}${c.boldYellow('m')}${c.dim('=medium ')}${c.boldGray('l')}${c.dim('=low  ')}${c.yellow('Δ')}${c.dim('=변경된 파일 수')}\n\n`);
+  process.stdout.write(`  ${c.dim(L('Legend: ', '표 범례: '))}${c.boldRed('c')}${c.dim('=critical ')}${c.boldMagenta('h')}${c.dim('=high ')}${c.boldYellow('m')}${c.dim('=medium ')}${c.boldGray('l')}${c.dim('=low  ')}${c.yellow('Δ')}${c.dim(L('=changed file count', '=변경된 파일 수'))}\n\n`);
   return 0;
 }
 

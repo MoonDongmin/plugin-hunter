@@ -67,9 +67,12 @@ pnpm add -g plugin-hunter
 After install, `ph` is available everywhere:
 
 ```bash
-ph --version          # prints the installed version (e.g. 1.0.0)
+ph --version          # prints the installed version (e.g. 1.1.0)
 ph --help             # full command reference
+ph lang               # show UI language (defaults to English; auto-detects Korean from system locale)
 ```
+
+> The CLI output is available in **English / Korean**. The default is English; if your system locale is `ko_KR.UTF-8` it auto-switches to Korean. To pin it explicitly use `ph lang en` or `ph lang ko`. For one-off overrides, use `ph --lang en <command>` or set `PH_LANG=en`.
 
 > Requires Node 18+ or Bun 1.1+. `git` must also be on PATH (used by `simple-git`).
 > If you have neither Node nor Bun, see the [single-binary downloads](#without-node-or-bun) below.
@@ -165,6 +168,31 @@ ph history --id ralph-loop@claude-plugins-official
 
 The most recent 500 entries live in `~/.ph/history.json`.
 
+### Scenario E — Switching UI language
+
+Every surface — CLI output, progress messages, reports, and even the LLM judge's finding descriptions — is bilingual (English / Korean). English is the default; users on `LANG=ko_KR.UTF-8` are auto-switched to Korean.
+
+```bash
+ph lang                  # show current and saved language preference
+ph lang en               # pin to English (persisted in ~/.ph/config.json)
+ph lang ko               # pin to Korean
+ph lang --reset          # clear saved preference, fall back to auto-detect
+
+# One-off overrides
+ph --lang en scan claude owner/repo
+PH_LANG=ko ph watch claude all
+```
+
+Language resolution priority (highest → lowest):
+
+1. `--lang` CLI flag
+2. `PH_LANG` environment variable
+3. `lang` field in `~/.ph/config.json` (set via `ph lang en|ko`)
+4. System locale (`process.env.LANG` matching `ko*` → Korean)
+5. English (default)
+
+> When English is selected, the judge prompt itself switches so the LLM writes finding descriptions in English — you'll never end up with an English CLI but Korean reasoning.
+
 ---
 
 ## Command reference
@@ -199,12 +227,23 @@ The most recent 500 entries live in `~/.ph/history.json`.
 | `ph history --limit <N>` | Cap to last N entries |
 | `ph history --id <plugin-id>` | Filter by plugin |
 
+### `ph lang` — UI language preference
+
+| Command | Description |
+|---|---|
+| `ph lang` | Show effective language and saved preference |
+| `ph lang en` | Pin to English (persisted) |
+| `ph lang ko` | Pin to Korean (persisted) |
+| `ph lang --reset` | Clear saved preference; fall back to auto-detect |
+
 ### Misc
 
 | Command | Description |
 |---|---|
 | `ph --version` | Print version |
 | `ph --help` | Full help |
+| `ph --lang <ko\|en>` | Global flag — override language for this invocation only |
+| `PH_LANG=<ko\|en>` | Environment variable — override language for the shell session |
 
 ### State file locations
 
@@ -212,6 +251,7 @@ The most recent 500 entries live in `~/.ph/history.json`.
 |---|---|
 | `~/.ph/registry.json` | Last scan result per plugin (basis for rug-pull diff) |
 | `~/.ph/history.json` | Scan history (most recent 500) |
+| `~/.ph/config.json` | User preferences (`lang` field — managed by `ph lang`) |
 
 ---
 

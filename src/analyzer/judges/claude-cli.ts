@@ -1,6 +1,7 @@
 import { readBoolean, readString, isRecord } from './parse.ts';
 import { commandExists, runProcess } from './process.ts';
 import { JudgeExecError, JudgeParseError, type LlmJudge } from './types.ts';
+import { L } from '../../i18n/index.ts';
 
 export class ClaudeCliJudge implements LlmJudge {
   readonly name = 'claude';
@@ -52,7 +53,10 @@ export class ClaudeCliJudge implements LlmJudge {
       result.exitCode,
       stderr.length > 0
         ? stderr
-        : `Claude Code CLI 가 stdout/stderr 없이 종료했습니다 (exit ${result.exitCode}). 로그인 상태 또는 네트워크를 확인하세요.`,
+        : L(
+            `Claude Code CLI exited without stdout/stderr (exit ${result.exitCode}). Check login state or network.`,
+            `Claude Code CLI 가 stdout/stderr 없이 종료했습니다 (exit ${result.exitCode}). 로그인 상태 또는 네트워크를 확인하세요.`,
+          ),
     );
   }
 }
@@ -82,7 +86,10 @@ function parseClaudeEnvelope(stdout: string, exitCode: number | null): string {
     if (resultText) parts.push(resultText);
     const detail = parts.length > 0
       ? parts.join(' — ')
-      : `Claude Code CLI 가 exit ${exitCode ?? 'unknown'} 으로 종료했습니다.`;
+      : L(
+          `Claude Code CLI exited with code ${exitCode ?? 'unknown'}.`,
+          `Claude Code CLI 가 exit ${exitCode ?? 'unknown'} 으로 종료했습니다.`,
+        );
     throw new JudgeExecError('claude', exitCode, detail);
   }
 

@@ -1,31 +1,39 @@
-const OUTPUT_RULES = [
-  '## Output rules',
-  'CRITICAL: Respond with ONLY a single JSON object inside a ```json code block.',
-  'No prose before or after the JSON block.',
-  'Schema:',
-  '```json',
-  '{',
-  '  "findings": [',
-  '    {',
-  '      "severity": "CRITICAL|HIGH|MEDIUM|LOW",',
-  '      "ruleId": "CL-NNN",',
-  '      "filePath": "relative/path",',
-  '      "lineNumber": 1,',
-  '      "snippet": "original suspicious text",',
-  '      "description": "한국어로 작성"',
-  '    }',
-  '  ]',
-  '}',
-  '```',
-  'If no actionable issue exists, return { "findings": [] }.',
-  'ruleId format: "CL-NNN" (e.g. CL-001).',
-  'description: 반드시 한국어로 작성. 1~3 문장, 왜 이 패턴이 악성인지 명료하게.',
-  'snippet: keep the original text from the file. Do not translate code or shell.',
-  'lineNumber: best effort, optional.',
-  'Do NOT flag documentation that warns against attacks, security-tooling source code, comments explaining why something is unsafe, or legitimate examples clearly framed as illustrations.',
-].join('\n');
+import { getLang } from '../../i18n/index.ts';
 
-export const JUDGE_SYSTEM_PROMPT = `You are a security auditor for AI-assistant plugins (Claude Code, Codex CLI, Gemini CLI).
+function outputRules(lang: 'en' | 'ko'): string {
+  const descRuleEn = 'description: write in English, 1–3 sentences explaining clearly why this pattern is malicious.';
+  const descRuleKo = 'description: 반드시 한국어로 작성. 1~3 문장, 왜 이 패턴이 악성인지 명료하게.';
+  const descFieldHint = lang === 'ko' ? '한국어로 작성' : 'written in English';
+  return [
+    '## Output rules',
+    'CRITICAL: Respond with ONLY a single JSON object inside a ```json code block.',
+    'No prose before or after the JSON block.',
+    'Schema:',
+    '```json',
+    '{',
+    '  "findings": [',
+    '    {',
+    '      "severity": "CRITICAL|HIGH|MEDIUM|LOW",',
+    '      "ruleId": "CL-NNN",',
+    '      "filePath": "relative/path",',
+    '      "lineNumber": 1,',
+    '      "snippet": "original suspicious text",',
+    `      "description": "${descFieldHint}"`,
+    '    }',
+    '  ]',
+    '}',
+    '```',
+    'If no actionable issue exists, return { "findings": [] }.',
+    'ruleId format: "CL-NNN" (e.g. CL-001).',
+    lang === 'ko' ? descRuleKo : descRuleEn,
+    'snippet: keep the original text from the file. Do not translate code or shell.',
+    'lineNumber: best effort, optional.',
+    'Do NOT flag documentation that warns against attacks, security-tooling source code, comments explaining why something is unsafe, or legitimate examples clearly framed as illustrations.',
+  ].join('\n');
+}
+
+function buildPrompt(lang: 'en' | 'ko'): string {
+  return `You are a security auditor for AI-assistant plugins (Claude Code, Codex CLI, Gemini CLI).
 
 ## What auto-loads on plugin install
 When a user installs a plugin, the AI agent may automatically read or execute the following files WITHOUT further consent:
@@ -46,4 +54,16 @@ Anything in tests/, docs/, examples/, fixtures/, dist/, README is NOT auto-loade
 5. Obfuscation — string concatenation across lines, homoglyphs, zero-width characters, base64-encoded credential paths, variable assembly of forbidden commands.
 6. Multi-file attacks — individually-benign files that combine into a credential exfiltration chain.
 
-${OUTPUT_RULES}`;
+${outputRules(lang)}`;
+}
+
+export function getJudgeSystemPrompt(): string {
+  return buildPrompt(getLang());
+}
+
+/**
+ * @deprecated kept for compatibility with callers that still read the static
+ * constant. New code should call `getJudgeSystemPrompt()` so the language
+ * resolves at invocation time.
+ */
+export const JUDGE_SYSTEM_PROMPT = buildPrompt('en');

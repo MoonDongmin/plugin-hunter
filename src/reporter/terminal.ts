@@ -13,6 +13,7 @@ import {
   truncate,
   visibleLength,
 } from '../cli/ui.ts';
+import { L } from '../i18n/index.ts';
 
 export function isUnsafe(report: ScanReport): boolean {
   if (report.highSurfaceSummary.critical > 0 || report.highSurfaceSummary.high > 0) return true;
@@ -48,13 +49,15 @@ export function renderReport(report: ScanReport, version: string): string {
   out.push(verdictBanner(report, unsafe, w));
   out.push('');
 
-  // ─── Plugin metadata ─────────────────────────────────────────────────────
-  out.push(c.bold('플러그인 정보'));
+  out.push(c.bold(L('Plugin info', '플러그인 정보')));
   const meta: string[][] = [
-    [c.dim('이름'), `${c.bold(report.pluginName)} ${c.dim('v' + report.pluginVersion)}`],
-    [c.dim('유형'), report.pluginType],
-    [c.dim('출처'), describeSource(report.source)],
-    [c.dim('파일'), `${report.filesScanned}개 검사 · 설치 공격면 ${c.bold(String(report.highSurfaceFiles))}개`],
+    [c.dim(L('name', '이름')), `${c.bold(report.pluginName)} ${c.dim('v' + report.pluginVersion)}`],
+    [c.dim(L('type', '유형')), report.pluginType],
+    [c.dim(L('source', '출처')), describeSource(report.source)],
+    [c.dim(L('files', '파일')), L(
+      `${report.filesScanned} scanned · install attack surface ${c.bold(String(report.highSurfaceFiles))}`,
+      `${report.filesScanned}개 검사 · 설치 공격면 ${c.bold(String(report.highSurfaceFiles))}개`,
+    )],
   ];
   for (const line of alignColumns(meta, 2)) out.push('  ' + line);
   out.push('');
@@ -65,8 +68,8 @@ export function renderReport(report: ScanReport, version: string): string {
   const metaCount = report.findings.filter(f => f.source === 'meta').length;
   const analyzerLine = [
     `${c.green(icon.check)} LLM judge ${c.dim(`(${judgeCount} findings)`)}`,
-    symlinkCount > 0 ? `${c.yellow(icon.warn)} 심볼릭 링크 ${c.dim(`(${symlinkCount})`)}` : null,
-    metaCount > 0 ? `${c.gray(icon.info)} 메타 ${c.dim(`(${metaCount})`)}` : null,
+    symlinkCount > 0 ? `${c.yellow(icon.warn)} ${L('symlink', '심볼릭 링크')} ${c.dim(`(${symlinkCount})`)}` : null,
+    metaCount > 0 ? `${c.gray(icon.info)} ${L('meta', '메타')} ${c.dim(`(${metaCount})`)}` : null,
   ].filter(Boolean).join('   ');
   out.push('  ' + analyzerLine);
   out.push('');
@@ -75,18 +78,17 @@ export function renderReport(report: ScanReport, version: string): string {
   const highFindings = report.findings.filter(f => f.surface === 'high');
   const lowFindings = report.findings.filter(f => f.surface === 'low');
 
-  out.push(c.bold('설치 공격면 ') + c.dim('— 세션 시작 시 자동 로드되는 파일'));
+  out.push(c.bold(L('Install attack surface ', '설치 공격면 ')) + c.dim(L('— files auto-loaded at session start', '— 세션 시작 시 자동 로드되는 파일')));
   out.push('');
   if (highFindings.length === 0) {
-    out.push(`  ${c.green(icon.check)} ${c.green('설치 공격면 깨끗함')}`);
+    out.push(`  ${c.green(icon.check)} ${c.green(L('install attack surface clean', '설치 공격면 깨끗함'))}`);
     out.push('');
   } else {
     appendSeverityGroups(out, highFindings, 'high');
   }
 
-  // ─── Low surface (informational) ─────────────────────────────────────────
   if (lowFindings.length > 0) {
-    out.push(c.bold(c.gray('대역 외 ')) + c.dim('— 테스트/픽스처/문서 (사용자가 직접 실행할 때만 동작, 판정에 영향 없음)'));
+    out.push(c.bold(c.gray(L('Out-of-band ', '대역 외 '))) + c.dim(L('— tests/fixtures/docs (executes only when user runs it; does not affect verdict)', '— 테스트/픽스처/문서 (사용자가 직접 실행할 때만 동작, 판정에 영향 없음)')));
     out.push('');
     appendSeverityGroups(out, lowFindings, 'low');
   }
@@ -98,9 +100,9 @@ export function renderReport(report: ScanReport, version: string): string {
 
   // ─── Summary footer ──────────────────────────────────────────────────────
   out.push(hr(w));
-  out.push(formatSummaryLine('설치 공격면', report.highSurfaceSummary));
+  out.push(formatSummaryLine(L('install surface', '설치 공격면'), report.highSurfaceSummary));
   if (lowFindings.length > 0) {
-    out.push(formatSummaryLine('대역 외    ', countByCategory(lowFindings)));
+    out.push(formatSummaryLine(L('out-of-band   ', '대역 외    '), countByCategory(lowFindings)));
   }
 
   // ─── Next steps ──────────────────────────────────────────────────────────
@@ -122,12 +124,18 @@ function verdictBanner(report: ScanReport, unsafe: boolean, width: number): stri
     if (h1 > 0) counts.push(c.boldMagenta(`upstream high ${h1}`));
     const countLine = counts.length > 0 ? `${c.dim('└─')} ${counts.join(c.dim(' · '))}` : '';
     return box({
-      title: `${badge('PRE-RUG-PULL', 'unsafe')}  업데이트 차단 권장`,
+      title: `${badge('PRE-RUG-PULL', 'unsafe')}  ${L('Block next update', '업데이트 차단 권장')}`,
       lines: [
         `${c.bold(report.pluginName)} ${c.dim('v' + report.pluginVersion)} ${c.dim('·')} ${c.dim(report.pluginType)}`,
         '',
-        `${c.yellow(icon.warn)} 현재 cache 는 ${c.bold('안전')} 하지만 marketplace 가 위험한 변경을 가지고 있습니다.`,
-        `  ${c.dim('다음 /plugin update 시 cache 로 복사되어 SessionStart 등에서 즉시 실행됩니다.')}`,
+        L(
+          `${c.yellow(icon.warn)} The cache is ${c.bold('safe')} now, but the marketplace contains risky changes.`,
+          `${c.yellow(icon.warn)} 현재 cache 는 ${c.bold('안전')} 하지만 marketplace 가 위험한 변경을 가지고 있습니다.`,
+        ),
+        `  ${c.dim(L(
+          'On the next /plugin update they will be copied to cache and executed immediately on SessionStart.',
+          '다음 /plugin update 시 cache 로 복사되어 SessionStart 등에서 즉시 실행됩니다.',
+        ))}`,
         ...(countLine ? ['  ' + countLine] : []),
       ],
       kind: 'unsafe',
@@ -145,11 +153,14 @@ function verdictBanner(report: ScanReport, unsafe: boolean, width: number): stri
       ? `${c.dim('└─')} ${counts.join(c.dim(' · '))}`
       : '';
     return box({
-      title: `${badge('UNSAFE', 'unsafe')}  설치하지 마세요`,
+      title: `${badge('UNSAFE', 'unsafe')}  ${L('Do not install', '설치하지 마세요')}`,
       lines: [
         `${c.bold(report.pluginName)} ${c.dim('v' + report.pluginVersion)} ${c.dim('·')} ${c.dim(report.pluginType)}`,
         '',
-        `${c.red(icon.cross)} 설치 공격면에서 ${c.bold('악성/의심 패턴')}이 발견되었습니다.`,
+        L(
+          `${c.red(icon.cross)} ${c.bold('Malicious / suspicious patterns')} found on the install attack surface.`,
+          `${c.red(icon.cross)} 설치 공격면에서 ${c.bold('악성/의심 패턴')}이 발견되었습니다.`,
+        ),
         ...(countLine ? ['  ' + countLine] : []),
       ],
       kind: 'unsafe',
@@ -157,34 +168,27 @@ function verdictBanner(report: ScanReport, unsafe: boolean, width: number): stri
     });
   }
   return box({
-    title: `${badge('SAFE', 'safe')}  설치 가능`,
+    title: `${badge('SAFE', 'safe')}  ${L('OK to install', '설치 가능')}`,
     lines: [
       `${c.bold(report.pluginName)} ${c.dim('v' + report.pluginVersion)} ${c.dim('·')} ${c.dim(report.pluginType)}`,
       '',
-      `${c.green(icon.check)} 설치 공격면 ${c.dim('(hooks · skills · agents · commands · MCP)')} 깨끗`,
-      `  critical / high finding 없음`,
+      L(
+        `${c.green(icon.check)} Install attack surface ${c.dim('(hooks · skills · agents · commands · MCP)')} clean`,
+        `${c.green(icon.check)} 설치 공격면 ${c.dim('(hooks · skills · agents · commands · MCP)')} 깨끗`,
+      ),
+      `  ${L('no critical / high findings', 'critical / high finding 없음')}`,
     ],
     kind: 'safe',
     width,
   });
 }
 
-/**
- * Claude 가 생성한 한국어 markdown 가이드를 터미널 친화적으로 렌더.
- *
- * 구조:
- *   - 상단: hr + 헤더 (◆ AI 권장 조치)
- *   - 본문: section 번호별 색상 코드 + 들여쓰기 + bullet 정규화
- *   - inline: **bold** → ANSI bold, `code` → cyan, *italic* → dim
- *
- * 색상 매핑은 사고 대응 단계의 의미와 정렬 (긴급 → 행동 → 분석 → 계획 → 회복).
- */
 const SECTION_COLORS: Array<(s: string) => string> = [
-  c.boldRed,       // 1. 즉시 조치 (긴급)
-  c.boldYellow,    // 2. 제거 절차 (행동)
-  c.boldMagenta,   // 3. 노출 가능성 평가 (분석)
-  c.boldCyan,      // 4. credential rotation (계획)
-  c.boldGreen,     // 5. 안전한 대안 (회복)
+  c.boldRed,
+  c.boldYellow,
+  c.boldMagenta,
+  c.boldCyan,
+  c.boldGreen,
 ];
 
 export function renderRemediation(text: string): string {
@@ -192,7 +196,7 @@ export function renderRemediation(text: string): string {
   const out: string[] = [];
   out.push('');
   out.push(hr(w));
-  out.push(`  ${c.boldCyan(icon.diamond + ' AI 권장 조치')}  ${c.dim('LLM judge가 finding 기반 생성')}`);
+  out.push(`  ${c.boldCyan(icon.diamond + L(' AI remediation', ' AI 권장 조치'))}  ${c.dim(L('generated by LLM judge from findings', 'LLM judge가 finding 기반 생성'))}`);
   out.push(hr(w));
 
   for (const raw of text.split('\n')) {
@@ -261,23 +265,38 @@ function renderInline(text: string): string {
 }
 
 function nextSteps(report: ScanReport, unsafe: boolean): string[] {
-  const lines: string[] = [c.bold('다음 단계')];
+  const lines: string[] = [c.bold(L('Next steps', '다음 단계'))];
   if (isPreRugPull(report)) {
-    lines.push(`  ${c.dim(icon.arrow)} 현재 cache 는 안전하므로 ${c.bold('지금 당장의 위험은 없음')} — 단 다음 update 차단 필요.`);
-    lines.push(`  ${c.dim(icon.arrow)} ${c.boldRed('/plugin update ' + report.pluginName + ' 을(를) 실행하지 마세요.')} marketplace 변경의 정상 여부를 작성자에게 확인 후 결정.`);
-    lines.push(`  ${c.dim(icon.arrow)} marketplace 코드 직접 검토: ${c.cyan('cat ' + (report.upstream?.marketplaceDir ?? '') + '/hooks/hooks.json')}`);
+    lines.push(`  ${c.dim(icon.arrow)} ${L(
+      `Cache is still safe so ${c.bold('no immediate risk')} — but block the next update.`,
+      `현재 cache 는 안전하므로 ${c.bold('지금 당장의 위험은 없음')} — 단 다음 update 차단 필요.`,
+    )}`);
+    lines.push(`  ${c.dim(icon.arrow)} ${c.boldRed(L(
+      `Do NOT run /plugin update ${report.pluginName}.`,
+      `/plugin update ${report.pluginName} 을(를) 실행하지 마세요.`,
+    ))} ${L(
+      'Verify the marketplace change with the author before deciding.',
+      'marketplace 변경의 정상 여부를 작성자에게 확인 후 결정.',
+    )}`);
+    lines.push(`  ${c.dim(icon.arrow)} ${L('Inspect marketplace source:', 'marketplace 코드 직접 검토:')} ${c.cyan('cat ' + (report.upstream?.marketplaceDir ?? '') + '/hooks/hooks.json')}`);
   } else if (unsafe) {
-    lines.push(`  ${c.dim(icon.arrow)} 설치를 ${c.boldRed('중단')}하고 위 finding을 검토하세요.`);
+    lines.push(`  ${c.dim(icon.arrow)} ${L(
+      `${c.boldRed('Abort')} installation and review the findings above.`,
+      `설치를 ${c.boldRed('중단')}하고 위 finding을 검토하세요.`,
+    )}`);
   } else {
-    lines.push(`  ${c.dim(icon.arrow)} 설치 후 변경 모니터링: ${c.cyan('ph watch claude ' + report.pluginName)}`);
-    lines.push(`  ${c.dim(icon.arrow)} 전체 재검사:           ${c.cyan('ph watch claude all')}`);
+    lines.push(`  ${c.dim(icon.arrow)} ${L('Monitor for post-install changes:', '설치 후 변경 모니터링:')} ${c.cyan('ph watch claude ' + report.pluginName)}`);
+    lines.push(`  ${c.dim(icon.arrow)} ${L('Re-scan everything:    ', '전체 재검사:           ')} ${c.cyan('ph watch claude all')}`);
   }
   return lines;
 }
 
 function appendUpstreamSection(lines: string[], up: UpstreamReport): void {
   const driftCount = up.drift.added.length + up.drift.modified.length + up.drift.removed.length;
-  lines.push(c.bold('Upstream ') + c.dim(`— marketplace dir 의 변경 (${driftCount}개) · 다음 /plugin update 시 cache 로 적용`));
+  lines.push(c.bold('Upstream ') + c.dim(L(
+    `— marketplace dir changes (${driftCount}) · applied to cache on next /plugin update`,
+    `— marketplace dir 의 변경 (${driftCount}개) · 다음 /plugin update 시 cache 로 적용`,
+  )));
   lines.push(`  ${c.dim(up.marketplaceDir)}`);
 
   if (up.drift.added.length > 0) {

@@ -75,9 +75,12 @@ pnpm add -g plugin-hunter
 설치가 끝나면 어디서든 `ph` 명령을 쓸 수 있습니다:
 
 ```bash
-ph --version          # 버전 확인 (예: 1.0.0)
+ph --version          # 버전 확인 (예: 1.1.0)
 ph --help             # 전체 명령어 도움말
+ph lang               # UI 언어 설정 표시 (기본 영어, 시스템 locale 기반 자동 감지)
 ```
+
+> CLI 출력은 **영어 / 한국어** 둘 다 지원합니다. 시스템 locale 이 `ko_KR.UTF-8` 이면 자동으로 한국어, 그 외엔 영어가 기본입니다. 명시적으로 바꾸려면 `ph lang ko` 또는 `ph lang en`. 1회용으로만 바꾸려면 `ph --lang ko <command>` 로 호출하거나 `PH_LANG=ko` 환경변수를 쓰세요.
 
 > Node 18+ 또는 Bun 1.1+ 가 필요합니다. `simple-git` 사용을 위해 `git` 도 PATH 에 있어야 합니다.
 > Bun/Node 가 아예 없는 환경이라면 [단일 바이너리 다운로드](#bun--node-가-둘-다-없는-환경) 섹션을 참고하세요.
@@ -173,6 +176,31 @@ ph history --id ralph-loop@claude-plugins-official
 
 `~/.ph/history.json` 에 최근 500건이 저장됩니다.
 
+### 시나리오 E — UI 언어 변경
+
+`ph` 의 CLI 출력 · 진행 메시지 · 리포트 · LLM judge 의 finding description 까지 모두 영어/한국어 둘 다 지원합니다. 디폴트는 영어이며, `LANG=ko_KR.UTF-8` 인 사용자는 자동으로 한국어로 떨어집니다.
+
+```bash
+ph lang                  # 현재 적용된 언어와 저장된 설정 확인
+ph lang en               # 영어로 영구 전환 (~/.ph/config.json 저장)
+ph lang ko               # 한국어로 영구 전환
+ph lang --reset          # 저장 설정 삭제 후 자동 감지로 복귀
+
+# 1회용 우선순위 override
+ph --lang en scan claude owner/repo
+PH_LANG=ko ph watch claude all
+```
+
+언어 결정 우선순위 (높음 → 낮음):
+
+1. `--lang` CLI 플래그
+2. `PH_LANG` 환경변수
+3. `~/.ph/config.json` 의 `lang` 필드 (`ph lang en|ko` 로 저장)
+4. 시스템 locale (`process.env.LANG` 이 `ko*` 면 한국어)
+5. 영어 (기본값)
+
+> 영어 모드에서는 LLM judge 의 finding description 도 영어로 생성되도록 judge prompt 가 함께 분기됩니다. CLI 만 영어인데 reasoning 만 한국어로 나오는 일은 없습니다.
+
 ---
 
 ## 명령어 레퍼런스
@@ -207,12 +235,23 @@ ph history --id ralph-loop@claude-plugins-official
 | `ph history --limit <N>` | 최근 N 건만 |
 | `ph history --id <plugin-id>` | 특정 플러그인 이력만 |
 
+### `ph lang` — UI 언어 설정
+
+| 명령어 | 설명 |
+|---|---|
+| `ph lang` | 현재 적용 언어 + 저장된 설정 표시 |
+| `ph lang en` | 영어로 영구 전환 |
+| `ph lang ko` | 한국어로 영구 전환 |
+| `ph lang --reset` | 저장 설정 삭제 후 자동 감지로 복귀 |
+
 ### 기타
 
 | 명령어 | 설명 |
 |---|---|
 | `ph --version` | 버전 출력 |
 | `ph --help` | 전체 도움말 |
+| `ph --lang <ko\|en>` | 글로벌 옵션 — 이번 호출만 언어 override |
+| `PH_LANG=<ko\|en>` | 환경변수 — 셸 세션 전체 언어 override |
 
 ### 상태 파일 위치
 
@@ -220,6 +259,7 @@ ph history --id ralph-loop@claude-plugins-official
 |---|---|
 | `~/.ph/registry.json` | 마지막 검사 결과 (rug-pull diff 기준) |
 | `~/.ph/history.json` | 검사 이력 (최근 500건) |
+| `~/.ph/config.json` | 사용자 설정 (`lang` 필드 — `ph lang` 으로 관리) |
 
 ---
 

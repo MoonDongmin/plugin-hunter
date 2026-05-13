@@ -11,6 +11,7 @@ import { generateRemediation } from '../analyzer/remediation.ts';
 import type { RegistryEntry } from '../state/types.ts';
 import type { Finding } from '../rules/types.ts';
 import { Spinner, alignColumns, badge, c, describeStage, hr, icon, statusBadge, termWidth } from './ui.ts';
+import { L } from '../i18n/index.ts';
 
 interface WatchOptions {
   quiet?: boolean;
@@ -26,7 +27,7 @@ export async function runWatchCommand(judgeName: string, target: string, opts: W
   const w = termWidth();
 
   if (discovered.length === 0) {
-    process.stderr.write(`\n${c.dim('설치된 플러그인이 없습니다.')}\n\n`);
+    process.stderr.write(`\n${c.dim(L('No plugins installed.', '설치된 플러그인이 없습니다.'))}\n\n`);
     return 0;
   }
 
@@ -36,15 +37,15 @@ export async function runWatchCommand(judgeName: string, target: string, opts: W
   } else {
     const found = findPluginByName(discovered, target);
     if (!found) {
-      process.stderr.write(`\n${c.red(icon.cross)} ${c.boldRed('플러그인을 찾을 수 없습니다:')} ${target}\n`);
-      process.stderr.write(`  ${c.dim('설치된 플러그인 보기:')} ${c.cyan('ph ls')}\n\n`);
+      process.stderr.write(`\n${c.red(icon.cross)} ${c.boldRed(L('Plugin not found:', '플러그인을 찾을 수 없습니다:'))} ${target}\n`);
+      process.stderr.write(`  ${c.dim(L('See installed plugins:', '설치된 플러그인 보기:'))} ${c.cyan('ph ls')}\n\n`);
       return 2;
     }
     queue = [found];
   }
 
   if (!opts.quiet) {
-    process.stderr.write(`\n${c.boldCyan('plugin-hunter')} ${c.dim('v' + version + ' — watch (' + judge.name + ')')}  ${c.gray('—')}  ${c.bold(`${queue.length}개 플러그인 재검사`)}\n`);
+    process.stderr.write(`\n${c.boldCyan('plugin-hunter')} ${c.dim('v' + version + ' — watch (' + judge.name + ')')}  ${c.gray('—')}  ${c.bold(L(`re-scanning ${queue.length} plugin(s)`, `${queue.length}개 플러그인 재검사`))}\n`);
     process.stderr.write(hr(w) + '\n');
   }
 
@@ -82,7 +83,7 @@ export async function runWatchCommand(judgeName: string, target: string, opts: W
     } catch (err) {
       if (!opts.quiet && stageActive) spinner.fail();
       const msg = err instanceof Error ? err.message : String(err);
-      process.stderr.write(`  ${c.red(icon.cross)} ${c.boldRed('검사 실패')} ${c.dim('(' + plugin.id + ')')} ${c.dim('—')} ${msg}\n`);
+      process.stderr.write(`  ${c.red(icon.cross)} ${c.boldRed(L('Scan failed', '검사 실패'))} ${c.dim('(' + plugin.id + ')')} ${c.dim('—')} ${msg}\n`);
       exitCode = Math.max(exitCode, 2);
       summary.push({ id: plugin.id, status: 'error', changed: 0 });
       continue;
@@ -123,10 +124,10 @@ export async function runWatchCommand(judgeName: string, target: string, opts: W
 
       if (!opts.quiet) {
         if (changedCount === 0) {
-          process.stderr.write(`\n  ${c.green(icon.check)} ${c.green('변경 없음')} ${c.dim('— 이전 검사 결과 유효')}\n`);
+          process.stderr.write(`\n  ${c.green(icon.check)} ${c.green(L('No changes', '변경 없음'))} ${c.dim(L('— previous scan still valid', '— 이전 검사 결과 유효'))}\n`);
         } else {
           process.stderr.write(
-            `\n  ${c.yellow(icon.warn)} ${c.boldYellow('변경됨:')} ${c.green('+' + diff.added.length)}  ${c.yellow('~' + diff.modified.length)}  ${c.red('-' + diff.removed.length)}\n`,
+            `\n  ${c.yellow(icon.warn)} ${c.boldYellow(L('Changed:', '변경됨:'))} ${c.green('+' + diff.added.length)}  ${c.yellow('~' + diff.modified.length)}  ${c.red('-' + diff.removed.length)}\n`,
           );
           for (const p of diff.added) process.stderr.write(`    ${c.green('+')} ${p}\n`);
           for (const p of diff.modified) process.stderr.write(`    ${c.yellow('~')} ${p}\n`);
@@ -134,7 +135,7 @@ export async function runWatchCommand(judgeName: string, target: string, opts: W
         }
 
         if (escalations.length > 0) {
-          process.stderr.write(`\n  ${badge('SURFACE ↑', 'unsafe')} ${c.boldRed('새로운 attack surface 등장:')}\n`);
+          process.stderr.write(`\n  ${badge('SURFACE ↑', 'unsafe')} ${c.boldRed(L('new attack surface appeared:', '새로운 attack surface 등장:'))}\n`);
           for (const e of escalations) {
             process.stderr.write(`    ${c.red('!')} ${c.bold(e.filePath)} ${c.dim('(' + e.ruleId + ')')}\n`);
           }
@@ -150,7 +151,7 @@ export async function runWatchCommand(judgeName: string, target: string, opts: W
       plugin.source.marketplaceDir
     ) {
       const upSpinner = new Spinner();
-      if (!opts.quiet) upSpinner.start(describeStage('upstream', `marketplace dir 과 비교 중`));
+      if (!opts.quiet) upSpinner.start(describeStage('upstream', L('comparing with marketplace dir', 'marketplace dir 과 비교 중')));
       try {
         const up = await compareUpstream(fileHashes, plugin.source.marketplaceDir, judge, report.pluginType);
         if (up) {
@@ -158,10 +159,12 @@ export async function runWatchCommand(judgeName: string, target: string, opts: W
           if (!opts.quiet) {
             const driftCount = up.drift.added.length + up.drift.modified.length + up.drift.removed.length;
             const hasHigh = up.findings.some(f => f.surface === 'high');
-            upSpinner.succeed(describeStage('upstream', hasHigh ? `${driftCount}개 변경 — 위험` : `${driftCount}개 변경 — informational`));
+            upSpinner.succeed(describeStage('upstream', hasHigh
+              ? L(`${driftCount} changes — risky`, `${driftCount}개 변경 — 위험`)
+              : L(`${driftCount} changes — informational`, `${driftCount}개 변경 — informational`)));
           }
         } else if (!opts.quiet) {
-          upSpinner.succeed(describeStage('upstream', 'marketplace dir 과 동일'));
+          upSpinner.succeed(describeStage('upstream', L('identical to marketplace dir', 'marketplace dir 과 동일')));
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -181,15 +184,14 @@ export async function runWatchCommand(judgeName: string, target: string, opts: W
     }
 
     if (cacheUnsafe && prev?.status === 'clean') {
-      process.stderr.write(`\n  ${badge('RUG-PULL', 'unsafe')} ${c.boldRed('이전엔 안전했으나 지금은 위험합니다:')} ${c.bold(plugin.id)}\n`);
+      process.stderr.write(`\n  ${badge('RUG-PULL', 'unsafe')} ${c.boldRed(L('previously safe but now unsafe:', '이전엔 안전했으나 지금은 위험합니다:'))} ${c.bold(plugin.id)}\n`);
     } else if (!cacheUnsafe && upstreamUnsafe) {
-      process.stderr.write(`\n  ${badge('PRE-RUG-PULL', 'unsafe')} ${c.boldRed('marketplace 에 위험 변경 발견 — 다음 /plugin update 차단 권장:')} ${c.bold(plugin.id)}\n`);
+      process.stderr.write(`\n  ${badge('PRE-RUG-PULL', 'unsafe')} ${c.boldRed(L('risky change found upstream — block next /plugin update:', 'marketplace 에 위험 변경 발견 — 다음 /plugin update 차단 권장:'))} ${c.bold(plugin.id)}\n`);
     }
 
-    // unsafe 면서 quiet 아니고 opt-out 도 안 한 경우에만 judge CLI(claude/codex/gemini)에게 권장 조치 생성을 위임.
     if (unsafe && !opts.quiet && opts.noRemediation !== true) {
       const remSpinner = new Spinner();
-      remSpinner.start(describeStage('remediation', `AI 권장 조치 생성 중 (${judge.name} CLI)`));
+      remSpinner.start(describeStage('remediation', L(`generating with ${judge.name} CLI`, `AI 권장 조치 생성 중 (${judge.name} CLI)`)));
       const result = await generateRemediation(report, judge);
       if (result.kind === 'ok') {
         remSpinner.succeed();
@@ -197,9 +199,9 @@ export async function runWatchCommand(judgeName: string, target: string, opts: W
       } else if (result.kind === 'error') {
         remSpinner.fail(describeStage('remediation-error', result.error));
       } else if (result.reason === 'empty-response') {
-        remSpinner.warn(describeStage('remediation-error', `${judge.name} CLI가 빈 응답을 반환했습니다`));
+        remSpinner.warn(describeStage('remediation-error', L(`${judge.name} CLI returned an empty response`, `${judge.name} CLI가 빈 응답을 반환했습니다`)));
       } else {
-        remSpinner.warn(describeStage('remediation-error', '권장 조치 대상 finding 없음'));
+        remSpinner.warn(describeStage('remediation-error', L('no findings eligible for remediation', '권장 조치 대상 finding 없음')));
       }
     }
 
@@ -250,8 +252,8 @@ async function prepareJudge(judgeName: string): Promise<LlmJudge | null> {
 
   if (await judge.isInstalled()) return judge;
 
-  process.stderr.write(`\n${c.red(icon.cross)} ${c.boldRed(`${judge.bin} CLI를 찾을 수 없습니다.`)}\n`);
-  process.stderr.write(`  ${c.dim(`${judge.bin}를 설치하고 PATH에 추가한 뒤 다시 실행하세요.`)}\n\n`);
+  process.stderr.write(`\n${c.red(icon.cross)} ${c.boldRed(L(`${judge.bin} CLI not found.`, `${judge.bin} CLI를 찾을 수 없습니다.`))}\n`);
+  process.stderr.write(`  ${c.dim(L(`Install ${judge.bin} and add it to PATH, then re-run.`, `${judge.bin}를 설치하고 PATH에 추가한 뒤 다시 실행하세요.`))}\n\n`);
   return null;
 }
 
@@ -262,7 +264,7 @@ function writeSummary(rows: { id: string; status: 'clean' | 'unsafe' | 'error'; 
   const errors = rows.filter(r => r.status === 'error').length;
 
   process.stdout.write('\n' + hr(w) + '\n');
-  process.stdout.write(`${c.bold('요약')} ${c.dim('— 총 ' + rows.length + '개')}\n\n`);
+  process.stdout.write(`${c.bold(L('Summary', '요약'))} ${c.dim(L('— total ' + rows.length, '— 총 ' + rows.length + '개'))}\n\n`);
   process.stdout.write(
     `  ${statusBadge('clean')} ${c.dim('×')} ${c.boldGreen(String(clean))}` +
     `   ${statusBadge('unsafe')} ${c.dim('×')} ${c.boldRed(String(unsafe))}` +
@@ -271,11 +273,11 @@ function writeSummary(rows: { id: string; status: 'clean' | 'unsafe' | 'error'; 
 
   const unsafeRows = rows.filter(x => x.status === 'unsafe');
   if (unsafeRows.length > 0) {
-    process.stdout.write(`  ${c.boldRed('위험 플러그인:')}\n`);
+    process.stdout.write(`  ${c.boldRed(L('Unsafe plugins:', '위험 플러그인:'))}\n`);
     const tableRows = unsafeRows.map(r => [
       statusBadge('unsafe'),
       c.bold(r.id),
-      r.changed > 0 ? c.yellow(`(변경 ${r.changed}개)`) : c.dim(''),
+      r.changed > 0 ? c.yellow(L(`(${r.changed} changed)`, `(변경 ${r.changed}개)`)) : c.dim(''),
     ]);
     for (const line of alignColumns(tableRows, 2)) {
       process.stdout.write(`    ${line}\n`);

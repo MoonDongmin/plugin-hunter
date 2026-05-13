@@ -1,11 +1,5 @@
-/**
- * Central UI helpers — TTY-aware colors, badges, spinner, layout utilities.
- *
- * 모든 CLI 커맨드는 이 모듈을 통해 출력하여 다음을 보장한다:
- *   - NO_COLOR / non-TTY 환경에서 자동으로 ANSI 제거
- *   - 터미널 폭에 맞춘 truncate / hr
- *   - 일관된 severity/status badge
- */
+// Central UI helpers — TTY-aware colors, badges, spinner, layout utilities.
+import { L } from '../i18n/index.ts';
 
 const COLOR_ENABLED = (() => {
   if (process.env.NO_COLOR) return false;
@@ -76,10 +70,6 @@ export function stripAnsi(s: string): string {
   return s.replace(ANSI_RE, '');
 }
 
-/**
- * East Asian Wide / Fullwidth 문자(한글, 한자, 일어, 전각 기호 등)는
- * 터미널에서 2칸을 차지한다. 박스/테이블 정렬을 위해 정확히 세어야 한다.
- */
 function charWidth(cp: number): number {
   if (cp < 0x1100) return 1;
   if (
@@ -108,12 +98,6 @@ export function visibleLength(s: string): number {
   return total;
 }
 
-/**
- * 한·영 혼합 텍스트를 주어진 visible width에 맞춰 줄바꿈.
- *   - 최근 공백이 있으면 거기서 break (영어 단어 안 깨짐)
- *   - 없으면 글자 단위 hard-break (한글/한자 어절도 안전)
- *   - ANSI는 미리 strip 후 처리 — 색이 있는 텍스트엔 사용하지 말 것.
- */
 export function wrapText(text: string, width: number): string[] {
   if (width <= 0) return [text];
   const chars = Array.from(stripAnsi(text));
@@ -153,10 +137,6 @@ export function wrapText(text: string, width: number): string[] {
   return lines;
 }
 
-/**
- * `text`를 `width`에 wrap한 뒤 모든 줄 앞에 `indent`를 붙여 단일 문자열로.
- * width는 indent 길이가 빠진 "본문 가용폭"으로 자동 계산.
- */
 export function indentWrap(text: string, indent: string, totalWidth: number): string {
   const inner = Math.max(20, totalWidth - visibleLength(indent));
   return wrapText(text, inner).map(line => indent + line).join('\n');
@@ -193,10 +173,6 @@ export const icon = {
 
 // ─── Badges ──────────────────────────────────────────────────────────────────
 
-/**
- * 컬러풀한 박스 배지 — `▌ TEXT ▐` 스타일.
- * non-TTY에서는 그냥 대괄호 텍스트.
- */
 export function badge(text: string, kind: 'safe' | 'unsafe' | 'warn' | 'info' | 'muted'): string {
   const T = ` ${text} `;
   if (!COLOR_ENABLED) return `[${text}]`;
@@ -249,12 +225,6 @@ export function hr(width = termWidth(), char = '─'): string {
   return c.gray(char.repeat(width));
 }
 
-/**
- * 박스 그리기 — 두꺼운 위/아래 모서리, 색은 kind에 따라.
- *   ╭─ title ──────────────────╮
- *   │  body line                │
- *   ╰───────────────────────────╯
- */
 export function box(opts: {
   title?: string;
   lines: string[];
@@ -314,7 +284,6 @@ export class Spinner {
     }, 80);
   }
 
-  /** 라벨만 교체 (스피너는 계속 회전) */
   retitle(label: string): void {
     this.label = label;
     if (!TTY) process.stderr.write(`  ${c.dim(label)}\n`);
@@ -343,7 +312,6 @@ export class Spinner {
     else process.stderr.write(`${icon.warn} ${text}\n`);
   }
 
-  /** 진행 중이면 멈추고, 라벨도 지운다 (다음 출력으로 넘어가기 전) */
   clear(): void {
     this.stop();
     if (TTY) process.stderr.write('\r\x1b[2K');
@@ -364,20 +332,23 @@ function formatMs(ms: number): string {
 
 // ─── Stage label mapping ─────────────────────────────────────────────────────
 
-const STAGE_LABELS: Record<string, string> = {
-  clone: '레포지토리 클론',
-  detect: '플러그인 탐지',
-  collect: '대상 파일 수집',
-  judge: 'LLM judge 의미 분석',
-  'judge-error': 'LLM judge 분석 실패',
-  remediation: 'AI 권장 조치 생성',
-  'remediation-error': 'AI 권장 조치 생성 실패',
-  upstream: 'Upstream marketplace drift 검사',
-  'upstream-error': 'Upstream drift 검사 실패',
-};
+function stageLabel(stage: string): string {
+  switch (stage) {
+    case 'clone': return L('Cloning repository', '레포지토리 클론');
+    case 'detect': return L('Detecting plugin', '플러그인 탐지');
+    case 'collect': return L('Collecting target files', '대상 파일 수집');
+    case 'judge': return L('Semantic analysis by LLM judge', 'LLM judge 의미 분석');
+    case 'judge-error': return L('LLM judge analysis failed', 'LLM judge 분석 실패');
+    case 'remediation': return L('Generating AI remediation', 'AI 권장 조치 생성');
+    case 'remediation-error': return L('AI remediation generation failed', 'AI 권장 조치 생성 실패');
+    case 'upstream': return L('Checking upstream marketplace drift', 'Upstream marketplace drift 검사');
+    case 'upstream-error': return L('Upstream drift check failed', 'Upstream drift 검사 실패');
+    default: return stage;
+  }
+}
 
 export function describeStage(stage: string, info?: string): string {
-  const base = STAGE_LABELS[stage] ?? stage;
+  const base = stageLabel(stage);
   return info ? `${base} ${c.dim('— ' + info)}` : base;
 }
 

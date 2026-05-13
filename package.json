@@ -1,10 +1,11 @@
 {
   "name": "plugin-hunter",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "ph — Scan Claude Code / Codex CLI / Gemini CLI plugins for malicious hooks, poisoned SKILL.md, and MCP tool-poisoning *before* you install. Uses your local LLM CLI as the judge — no API key required.",
   "type": "module",
   "bin": {
-    "ph": "./dist/cli.js"
+    "ph": "./dist/cli.js",
+    "plugin-hunter": "./dist/cli.js"
   },
   "files": [
     "dist/cli.js",

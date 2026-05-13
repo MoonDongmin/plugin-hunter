@@ -3,6 +3,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import type { Finding, FileRole, InstallSurface, ScanTarget } from '../rules/types.ts';
 import { parseHooksJson } from '../parser/hooks-json.ts';
 import { parseMcpJson } from '../parser/mcp-json.ts';
+import { L } from '../i18n/index.ts';
 
 /**
  * /plugin install 시 Claude Code / Codex CLI 가 자동으로 로드/실행하는 파일 매트릭스.
@@ -165,7 +166,10 @@ function checkSymlink(rootDir: string, full: string, rel: string): Finding | nul
     surface: 'high',
     filePath: rel,
     snippet: `${rel} -> ${target}${stExists ? '' : ' (broken)'}`,
-    description: `심볼릭 링크가 레포 외부(${target})를 가리킴 — path traversal 벡터 가능성.`,
+    description: L(
+      `Symbolic link points outside the repo (${target}) — possible path traversal vector.`,
+      `심볼릭 링크가 레포 외부(${target})를 가리킴 — path traversal 벡터 가능성.`,
+    ),
   };
 }
 

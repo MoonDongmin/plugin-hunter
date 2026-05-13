@@ -1,6 +1,6 @@
 import type { FileRole, Finding, PluginType, ScanTarget, Severity } from '../rules/types.ts';
 import { extractJsonObject } from './judges/parse.ts';
-import { JUDGE_SYSTEM_PROMPT } from './judges/prompt.ts';
+import { getJudgeSystemPrompt } from './judges/prompt.ts';
 import type { LlmJudge } from './judges/types.ts';
 
 const MAX_TOTAL_BYTES = 200_000;
@@ -42,7 +42,7 @@ export async function analyzeWithJudge(
   const bundle = bundleTargets(highSurface);
   if (!bundle) return [];
 
-  const raw = await judge.invoke(JUDGE_SYSTEM_PROMPT, `Plugin type: ${pluginType}\n\nFiles:\n\n${bundle}`);
+  const raw = await judge.invoke(getJudgeSystemPrompt(), `Plugin type: ${pluginType}\n\nFiles:\n\n${bundle}`);
   const parsed = extractJsonObject(raw);
   const findingsValue = parsed['findings'];
   if (!Array.isArray(findingsValue)) return [];

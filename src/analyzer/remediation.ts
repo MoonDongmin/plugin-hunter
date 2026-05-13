@@ -1,7 +1,8 @@
 import type { ScanReport } from '../rules/types.ts';
 import type { LlmJudge } from './judges/types.ts';
+import { L, getLang } from '../i18n/index.ts';
 
-const SYSTEM_PROMPT = `당신은 AI 코딩 에이전트(Claude Code, Codex CLI, Gemini CLI) 플러그인 보안 사고 대응 가이드입니다.
+const SYSTEM_PROMPT_KO = `당신은 AI 코딩 에이전트(Claude Code, Codex CLI, Gemini CLI) 플러그인 보안 사고 대응 가이드입니다.
 사용자는 방금 자신이 설치했거나 설치하려던 플러그인이 unsafe 판정을 받았습니다.
 findings 리스트를 입력받아, 사용자가 즉시 따를 수 있는 한국어 markdown 가이드를 작성하세요.
 
@@ -17,6 +18,27 @@ findings 리스트를 입력받아, 사용자가 즉시 따를 수 있는 한국
 - 추측보다 finding 근거 우선. 근거 없는 단정 금지.
 - 각 섹션은 짧게, 불릿/번호 사용. 전체 600 토큰 미만 권장.
 - 단호하고 명확하게. 군더더기 없음.`;
+
+const SYSTEM_PROMPT_EN = `You are a security incident-response guide for AI coding-agent plugins (Claude Code, Codex CLI, Gemini CLI).
+The user has just installed (or was about to install) a plugin that was judged UNSAFE.
+Given a list of findings, write an actionable English markdown guide the user can follow right now.
+
+## Output format (exactly these 5 sections in order, **use bold headers**)
+**1. Immediate action** — what to stop right now (kill running session, disable the plugin, etc.). 1–2 lines.
+**2. Removal procedure** — uninstall command. For Claude Code use \`/plugin uninstall <name>\`, for Codex CLI use the equivalent. Include residue cleanup (install dir, cache).
+**3. Exposure assessment** — based on finding descriptions/snippets, which assets may have been exposed (e.g. \`~/.ssh/id_rsa\`, \`~/.aws/credentials\`, \`.env\`, shell history). If uncertain, say "cannot confirm — assume conservative exposure".
+**4. Credential rotation priority** — rotation order, one item per line. Default flow: SSH key → cloud credential → API token → DB password.
+**5. Safer alternative (optional)** — prefer the official marketplace or vetted fork. One line if obvious, omit if unknown.
+
+## Writing rules
+- Entirely in English. Keep command names and file paths verbatim.
+- Ground every claim in a finding. No unsupported assertions.
+- Keep each section short; use bullets/numbers. Aim under 600 tokens total.
+- Be decisive and concise. No filler.`;
+
+function systemPrompt(): string {
+  return getLang() === 'ko' ? SYSTEM_PROMPT_KO : SYSTEM_PROMPT_EN;
+}
 
 export type RemediationResult =
   | { kind: 'ok'; text: string }
@@ -45,11 +67,11 @@ export async function generateRemediation(report: ScanReport, judge: LlmJudge): 
   ].join('\n');
 
   try {
-    const text = (await judge.invoke(SYSTEM_PROMPT, userMessage)).trim();
+    const text = (await judge.invoke(systemPrompt(), userMessage)).trim();
     if (text.length === 0) return { kind: 'skipped', reason: 'empty-response' };
     return { kind: 'ok', text };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return { kind: 'error', error: `${judge.name} CLI 호출 실패 — ${message}` };
+    return { kind: 'error', error: L(`${judge.name} CLI call failed — ${message}`, `${judge.name} CLI 호출 실패 — ${message}`) };
   }
 }

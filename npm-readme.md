@@ -32,9 +32,12 @@ pnpm add -g plugin-hunter
 ```bash
 ph --version
 ph --help
+ph lang             # show / change UI language (English default, auto-detects Korean from locale)
 ```
 
 Requires **Node 18+** or **Bun 1.1+**, and `git` on `PATH`.
+
+> CLI output, reports, and judge reasoning are bilingual (**English / Korean**). English is the default; `ph lang ko` or `PH_LANG=ko` switches to Korean.
 
 > No Node/Bun? Download a single binary from [Releases](https://github.com/MoonDongmin/plugin-hunter/releases) (Bun runtime embedded, zero dependencies).
 
@@ -109,7 +112,19 @@ ph history --limit 50
 ph history --id <plugin-id>
 ```
 
-State lives in `~/.ph/registry.json` (last scan result, basis for rug-pull diff) and `~/.ph/history.json` (last 500 scans).
+State lives in `~/.ph/registry.json` (last scan result, basis for rug-pull diff), `~/.ph/history.json` (last 500 scans), and `~/.ph/config.json` (user preferences such as `lang`).
+
+### UI language
+
+```bash
+ph lang                    # show effective + saved language
+ph lang en | ph lang ko    # pin permanently
+ph lang --reset            # back to auto-detect
+ph --lang en <command>     # one-off override
+PH_LANG=ko ph <command>    # shell-session override
+```
+
+Resolution priority: `--lang` flag → `PH_LANG` env → `~/.ph/config.json` → system `LANG` → `en` default. The judge prompt switches with the UI language so finding descriptions stay in the chosen language.
 
 ---
 

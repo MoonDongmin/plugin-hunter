@@ -8,6 +8,7 @@ import { parseGitHubUrl } from '../util/github.ts';
 import { buildPluginId, type ScanSource } from '../state/types.ts';
 import { JudgePolicyBlockError, type LlmJudge } from '../analyzer/judges/types.ts';
 import type { Finding, ScanReport, SeverityCount } from '../rules/types.ts';
+import { L } from '../i18n/index.ts';
 
 export interface ScanOptions {
   onStage?: (stage: string, info?: string) => void;
@@ -38,7 +39,7 @@ export async function scanLocalDir(
 
   const errorFindings: Finding[] = [];
   let judgeFindings: Finding[] = [];
-  onStage('judge', `${judge.name} CLI 분석 중`);
+  onStage('judge', L(`analyzing with ${judge.name} CLI`, `${judge.name} CLI 분석 중`));
   try {
     judgeFindings = await analyzeWithJudge(judge, targets, detected.pluginType);
   } catch (err) {
@@ -46,9 +47,6 @@ export async function scanLocalDir(
     onStage('judge-error', msg);
 
     if (err instanceof JudgePolicyBlockError) {
-      // LLM 제공자 측 정책 필터가 분석 자체를 거부했다는 사실은
-      // "이 콘텐츠가 사이버보안 위협 패턴을 포함한다" 는 강한 시그널이다.
-      // 단순 실패가 아니라 CRITICAL finding 으로 격상하여 UNSAFE 판정에 반영한다.
       errorFindings.push({
         severity: 'CRITICAL',
         ruleId: 'PH-PROVIDER-POLICY-BLOCK',
@@ -56,11 +54,17 @@ export async function scanLocalDir(
         surface: 'high',
         filePath: '(scanner)',
         snippet: err.providerRawMessage.slice(0, 200),
-        description:
+        description: L(
+          `${judge.name} CLI provider policy filter refused to analyze this plugin. ` +
+            'This is a strong signal that the input content may contain dangerous patterns ' +
+            '(credential theft, exfiltration, RCE, etc.). Abort installation. Benign content ' +
+            'can occasionally be false-positive-blocked too, so cross-verify with another judge ' +
+            '("ph scan claude" or "ph scan gemini").',
           `${judge.name} CLI 의 제공자 정책 필터가 이 플러그인의 분석을 거부했습니다. ` +
-          '이는 입력 콘텐츠가 위험 패턴(자격 증명 탈취, 외부 송신, RCE 등)을 포함할 가능성이 매우 높다는 ' +
-          '신호로 해석될 수 있습니다. 설치를 중단하세요. 단, 정상 콘텐츠도 false positive 로 차단될 수 ' +
-          '있으므로 "ph scan claude" 또는 "ph scan gemini" 로 cross-verify 를 권장합니다.',
+            '이는 입력 콘텐츠가 위험 패턴(자격 증명 탈취, 외부 송신, RCE 등)을 포함할 가능성이 매우 높다는 ' +
+            '신호로 해석될 수 있습니다. 설치를 중단하세요. 단, 정상 콘텐츠도 false positive 로 차단될 수 ' +
+            '있으므로 "ph scan claude" 또는 "ph scan gemini" 로 cross-verify 를 권장합니다.',
+        ),
       });
     } else {
       errorFindings.push({
@@ -70,7 +74,10 @@ export async function scanLocalDir(
         surface: 'high',
         filePath: '(scanner)',
         snippet: msg.slice(0, 200),
-        description: `${judge.name} judge 분석이 실패하여 결과를 신뢰할 수 없습니다. 안전 판정을 보류합니다. CLI 설치와 인증 상태를 확인 후 재시도하세요.`,
+        description: L(
+          `${judge.name} judge analysis failed; verdict cannot be trusted. Holding safe verdict. Verify CLI install / auth and retry.`,
+          `${judge.name} judge 분석이 실패하여 결과를 신뢰할 수 없습니다. 안전 판정을 보류합니다. CLI 설치와 인증 상태를 확인 후 재시도하세요.`,
+        ),
       });
     }
   }

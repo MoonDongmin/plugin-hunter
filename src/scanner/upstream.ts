@@ -4,6 +4,7 @@ import { analyzeWithJudge } from '../analyzer/judge.ts';
 import { diffHashes } from '../state/registry.ts';
 import type { Finding, PluginType, ScanTarget, UpstreamReport } from '../rules/types.ts';
 import type { LlmJudge } from '../analyzer/judges/types.ts';
+import { L } from '../i18n/index.ts';
 
 /**
  * Marketplace dir (= 다음 /plugin update 시 cache 로 복사될 source-of-truth) 와 현재 cache 의
@@ -51,9 +52,12 @@ export async function compareUpstream(
       surface: 'high',
       filePath: '(upstream)',
       snippet: msg.slice(0, 200),
-      description:
+      description: L(
+        `${judge.name} judge failed to analyze the marketplace; upstream safety cannot be confirmed. ` +
+          'Escalating PRE-RUG-PULL likelihood to HIGH conservatively. Check judge CLI auth/network and retry.',
         `${judge.name} judge 의 marketplace 분석이 실패하여 upstream 안전성을 확정할 수 없습니다. ` +
-        '신뢰성 보존 차원에서 PRE-RUG-PULL 가능성을 HIGH 로 격상합니다. judge CLI 의 인증/네트워크 상태를 확인 후 재시도하세요.',
+          '신뢰성 보존 차원에서 PRE-RUG-PULL 가능성을 HIGH 로 격상합니다. judge CLI 의 인증/네트워크 상태를 확인 후 재시도하세요.',
+      ),
       origin: 'upstream',
     });
   }
@@ -86,10 +90,14 @@ function buildCleanDriftFinding(drift: { added: string[]; removed: string[]; mod
     surface: 'low',
     filePath: '(upstream)',
     snippet: summary + (sample ? ` — ${sample}` : ''),
-    description:
+    description: L(
+      'The marketplace dir has changes that differ from cache. Judge verdict is safe, but ' +
+        'those changes will be copied to cache on the next /plugin update and auto-loaded at SessionStart. ' +
+        'Confirm whether this is an expected legitimate change.',
       'marketplace dir 에 cache 와 다른 변경이 있습니다. judge 분석 결과는 안전하지만, ' +
-      '다음 /plugin update 시 이 변경이 cache 로 복사되어 SessionStart 등에서 자동 로드됩니다. ' +
-      '예상한 정상 변경인지 확인하세요.',
+        '다음 /plugin update 시 이 변경이 cache 로 복사되어 SessionStart 등에서 자동 로드됩니다. ' +
+        '예상한 정상 변경인지 확인하세요.',
+    ),
     origin: 'upstream',
   };
 }

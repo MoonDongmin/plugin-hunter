@@ -2,14 +2,17 @@ import { discoverAllPlugins, type DiscoveredPlugin } from '../discovery/index.ts
 import { loadRegistry } from '../state/registry.ts';
 import type { RegistryEntry } from '../state/types.ts';
 import { alignColumns, badge, c, hr, icon, statusBadge, termWidth, truncate } from './ui.ts';
+import { L } from '../i18n/index.ts';
 
-const GROUP_LABEL: Record<DiscoveredPlugin['group'], string> = {
-  'claude': 'Claude Code 플러그인',
-  'codex-plugin': 'Codex CLI 플러그인',
-  'codex-skill': 'Codex CLI skills',
-  'codex-rule': 'Codex CLI rules',
-  'codex-memory': 'Codex CLI memories',
-};
+function groupLabel(group: DiscoveredPlugin['group']): string {
+  switch (group) {
+    case 'claude': return L('Claude Code plugins', 'Claude Code 플러그인');
+    case 'codex-plugin': return L('Codex CLI plugins', 'Codex CLI 플러그인');
+    case 'codex-skill': return 'Codex CLI skills';
+    case 'codex-rule': return 'Codex CLI rules';
+    case 'codex-memory': return 'Codex CLI memories';
+  }
+}
 
 export function runListCommand(): number {
   const discovered = discoverAllPlugins();
@@ -18,7 +21,7 @@ export function runListCommand(): number {
   const w = termWidth();
 
   // ─── Brand line ───────────────────────────────────────────────────────────
-  process.stdout.write(`\n${c.boldCyan('plugin-hunter')} ${c.dim('— 내 컴퓨터의 플러그인')}\n`);
+  process.stdout.write(`\n${c.boldCyan('plugin-hunter')} ${c.dim(L('— plugins on this machine', '— 내 컴퓨터의 플러그인'))}\n`);
   process.stdout.write(hr(w) + '\n');
 
   // ─── Top-level summary ────────────────────────────────────────────────────
@@ -26,7 +29,7 @@ export function runListCommand(): number {
   const totalSafe = Object.values(registry.entries).filter(e => e.status === 'clean').length;
   const totalUnscanned = discovered.filter(p => !registry.entries[p.id]).length;
   process.stdout.write(
-    `  ${badge(String(discovered.length) + ' 설치됨', 'info')}` +
+    `  ${badge(String(discovered.length) + L(' installed', ' 설치됨'), 'info')}` +
     `   ${statusBadge('clean')} ${c.boldGreen(String(totalSafe))}` +
     `   ${statusBadge('unsafe')} ${c.boldRed(String(totalUnsafe))}` +
     `   ${statusBadge('unscanned')} ${c.boldGray(String(totalUnscanned))}\n\n`,
@@ -36,9 +39,8 @@ export function runListCommand(): number {
   for (const group of groups) {
     const items = discovered.filter(p => p.group === group);
     if (items.length === 0) continue;
-    process.stdout.write(`${c.bold(GROUP_LABEL[group])} ${c.dim('(' + items.length + ')')}\n`);
+    process.stdout.write(`${c.bold(groupLabel(group))} ${c.dim('(' + items.length + ')')}\n`);
 
-    // 메인 행: status + id + version
     const mainRows = items.map(p => {
       seenIds.add(p.id);
       const entry = registry.entries[p.id];
@@ -59,10 +61,9 @@ export function runListCommand(): number {
     process.stdout.write('\n');
   }
 
-  // discovery에 없지만 registry에 있는 항목 (주로 GitHub URL scan 결과)
   const orphans = Object.values(registry.entries).filter(e => !seenIds.has(e.id));
   if (orphans.length > 0) {
-    process.stdout.write(`${c.bold('URL 스캔 기록')} ${c.dim('(' + orphans.length + ')')}\n`);
+    process.stdout.write(`${c.bold(L('URL scan history', 'URL 스캔 기록'))} ${c.dim('(' + orphans.length + ')')}\n`);
     const mainRows = orphans.map(e => [
       statusBadge(e.status),
       c.bold(e.pluginName) + c.dim('  ' + e.id),
@@ -81,14 +82,14 @@ export function runListCommand(): number {
   }
 
   if (discovered.length === 0 && orphans.length === 0) {
-    process.stdout.write(`  ${c.dim('설치된 플러그인이 없습니다.')}\n`);
-    process.stdout.write(`  ${c.dim('GitHub URL을 직접 검사하려면:')} ${c.cyan('ph scan claude <url>')}\n\n`);
+    process.stdout.write(`  ${c.dim(L('No plugins installed.', '설치된 플러그인이 없습니다.'))}\n`);
+    process.stdout.write(`  ${c.dim(L('To scan a GitHub URL directly:', 'GitHub URL을 직접 검사하려면:'))} ${c.cyan('ph scan claude <url>')}\n\n`);
     return 0;
   }
 
   process.stdout.write(hr(w) + '\n');
-  process.stdout.write(`  ${c.dim(icon.arrow + ' 모든 플러그인 재검사:')} ${c.cyan('ph watch claude all')}\n`);
-  process.stdout.write(`  ${c.dim(icon.arrow + ' 한 개만 재검사:       ')} ${c.cyan('ph watch claude <name>')}\n\n`);
+  process.stdout.write(`  ${c.dim(icon.arrow + L(' re-scan everything:', ' 모든 플러그인 재검사:'))} ${c.cyan('ph watch claude all')}\n`);
+  process.stdout.write(`  ${c.dim(icon.arrow + L(' re-scan one plugin: ', ' 한 개만 재검사:       '))} ${c.cyan('ph watch claude <name>')}\n\n`);
   return 0;
 }
 
@@ -100,7 +101,7 @@ function findingLine(entry: RegistryEntry): string {
     fc.medium > 0 ? c.boldYellow(`medium ${fc.medium}`) : null,
     fc.low > 0 ? c.boldGray(`low ${fc.low}`) : null,
   ].filter(Boolean).join('  ');
-  const findingsPart = counts || c.dim('finding 없음');
+  const findingsPart = counts || c.dim(L('no findings', 'finding 없음'));
   return `${c.gray(icon.bullet)} ${findingsPart}  ${c.dim('· last scan ' + formatTs(entry.lastScannedAt))}`;
 }
 

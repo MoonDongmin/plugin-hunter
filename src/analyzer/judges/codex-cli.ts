@@ -1,6 +1,7 @@
 import { isRecord, readArray, readRecord, readString } from './parse.ts';
 import { commandExists, runProcess } from './process.ts';
 import { JudgeExecError, JudgeParseError, JudgePolicyBlockError, type LlmJudge } from './types.ts';
+import { L } from '../../i18n/index.ts';
 
 export class CodexCliJudge implements LlmJudge {
   readonly name = 'codex';
@@ -82,11 +83,16 @@ function classifyCodexError(message: string): CodexErrorClassification {
   if (/flagged for possible cybersecurity risk/i.test(message)) {
     return {
       kind: 'policy-block',
-      userMessage:
+      userMessage: L(
+        'Codex refused to analyze this plugin. ' +
+          'OpenAI policy filter classified the input as a cybersecurity threat pattern, ' +
+          'which strongly suggests the plugin contains very dangerous content. ' +
+          'Abort installation and re-run with "ph scan claude" or "ph scan gemini" for a second opinion.',
         'Codex 가 이 플러그인의 분석 자체를 거부했습니다. ' +
-        'OpenAI 정책 필터가 입력 콘텐츠를 사이버보안 위협 패턴으로 분류한 결과로, ' +
-        '플러그인 내부에 매우 위험한 패턴이 포함되어 있을 가능성이 높습니다. ' +
-        '설치를 중단하고, 정밀 분석은 "ph scan claude" 또는 "ph scan gemini" 로 재실행하세요.',
+          'OpenAI 정책 필터가 입력 콘텐츠를 사이버보안 위협 패턴으로 분류한 결과로, ' +
+          '플러그인 내부에 매우 위험한 패턴이 포함되어 있을 가능성이 높습니다. ' +
+          '설치를 중단하고, 정밀 분석은 "ph scan claude" 또는 "ph scan gemini" 로 재실행하세요.',
+      ),
       raw: message,
     };
   }
